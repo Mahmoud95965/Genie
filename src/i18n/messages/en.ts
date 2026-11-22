@@ -5,11 +5,11 @@
 export const enMessages = {
   meta: {
     description:
-      "Genie is a digital product studio. We design and build digital products, platforms, and experiences that turn ambitious ideas into something people can actually use.",
+      "Genie is an independent digital technology company building products, platforms, and intelligent digital experiences. We turn ideas into meaningful solutions through technology, design, and innovation — creating products that solve real problems and open new possibilities.",
     workDescription:
       "Selected work from Genie — Port Said Hub, Qena Services Platform, and Genie Experiments. Real projects, honestly labelled.",
     aboutDescription:
-      "Genie is a new independent digital product studio. Our vision, philosophy, what we believe, how we work, and our ambitions.",
+      "Genie is an independent digital technology company. Our vision, mission, and philosophy — and the five things we do.",
     contactDescription:
       "Let's create something meaningful. Tell Genie about your idea — project type, description and budget.",
   },
@@ -34,22 +34,43 @@ export const enMessages = {
     titleA: "Ideas deserve",
     titleB: "to become real.",
     supporting:
-      "We design and build digital products, platforms, and experiences that turn ambitious ideas into something people can actually use.",
+      "Genie is an independent digital technology company building products, platforms, and intelligent digital experiences. We turn ideas into meaningful solutions through technology, design, and innovation — creating products that solve real problems and open new possibilities.",
     explore: "Explore our work",
     build: "Let’s build something",
     canvasLabel: "Digital energy — move your cursor",
     scroll: "Scroll — selected work below",
   },
   home: {
+    marquee: [
+      "Make Ideas Real.",
+      "Digital Products",
+      "Digital Platforms",
+      "Technology & AI",
+      "Digital Experiences",
+      "Innovation",
+    ],
+    whoEyebrow: "Who we are",
+    whoHeading: "An independent technology company.",
+    whoText1:
+      "We don't limit ourselves to building websites or developing software. We invent digital products, create platforms that connect services, people, and opportunities, and use technology and AI to deliver experiences that are more effective and easier to use.",
+    whoText2:
+      "Genie is new and independent — small by choice, and focused on work that has a reason to exist. We judge everything we build by whether it solves a real problem.",
     selectedEyebrow: "Selected work",
     selectedHeading: "Things we’re building.",
     allWork: "All work",
     viewProject: "View project",
     viewCaseStudy: "view case study",
     whatEyebrow: "What we do",
-    whatHeading: "Capabilities, not a service menu.",
+    whatHeading: "Five things we do.",
     whatIntro:
-      "Six things we do well — and only take on work where all of them can serve the idea.",
+      "Five pillars, one purpose — turning ideas into products, platforms, and experiences that work.",
+    visionEyebrow: "Vision & mission",
+    visionHeading: "Our vision",
+    visionText:
+      "To help build a smarter, more connected digital future — through technology products and solutions that make ideas truly valuable.",
+    missionHeading: "Our mission",
+    missionText:
+      "Turning ideas into useful digital products that combine creativity, technology, and design — solving real problems.",
     approachEyebrow: "Our approach",
     approachHeading: "From idea to something real.",
     approach: [
@@ -58,38 +79,34 @@ export const enMessages = {
       { title: "Build", text: "Design, develop, test, and bring the product to life." },
       { title: "Evolve", text: "Improve, expand, and adapt as the product grows." },
     ],
-    philosophyEyebrow: "Brand philosophy",
-    philosophyQuoteA: "Technology should do more than exist.",
-    philosophyQuoteB: "It should make something better.",
+    philosophyEyebrow: "Our philosophy",
+    philosophyQuoteA: "Technology is not an end in itself.",
+    philosophyQuoteB: "A product's value is in the problems it solves.",
     philosophyText:
-      "We believe in useful technology, thoughtful design, and meaningful experiences — in building things that have a reason to exist, and in the discipline to say no to the ones that don’t.",
+      "A product's value is not in how complex it is, but in its ability to solve a problem, make people's lives easier, and create new opportunities. That is the test every Genie product has to pass.",
     closingHeading: "Have an idea? Let’s make it real.",
     closingButton: "Start a conversation",
   },
   capabilities: [
     {
-      title: "Digital Product Development",
-      text: "From the first sketch to a product people rely on — scoped honestly, built to last, and shipped in working increments.",
+      title: "Digital Products",
+      text: "Designing and building digital products from idea to launch.",
     },
     {
-      title: "Web Platforms",
-      text: "Platforms that organise something real: cities, services, communities. Built to scale with the people who use them.",
+      title: "Digital Platforms",
+      text: "Platforms that connect users with services and opportunities.",
     },
     {
-      title: "UI/UX Design",
-      text: "Interfaces that get out of the way. Clear hierarchy, honest copy, and flows designed around what a person is trying to do.",
+      title: "Technology & AI",
+      text: "Applying technology and AI to practical, real-world solutions.",
     },
     {
-      title: "AI-Powered Experiences",
-      text: "AI where it earns its place — assistants that answer real questions, tools that save real time. Never AI for the sake of it.",
+      title: "Digital Experiences",
+      text: "Crafting digital experiences that are simple, modern, and different.",
     },
     {
-      title: "Digital Ecosystems",
-      text: "Products that connect: directories, maps, accounts, admin tools — one coherent system instead of five disconnected ones.",
-    },
-    {
-      title: "Interactive Experiences",
-      text: "Motion, generative visuals and interaction used with intent — to make an idea felt, not just read.",
+      title: "Innovation",
+      text: "Exploring new ideas and turning them into projects that can grow and scale.",
     },
   ],
   work: {
@@ -120,38 +137,20 @@ export const enMessages = {
   },
   about: {
     eyebrow: "About",
-    heading: "A new studio, built around one belief.",
+    heading: "An independent technology company, built to make ideas real.",
     intro:
-      "Genie is a new independent technology identity. We build useful digital products and experiences through technology, creativity, and thoughtful execution — and we judge our work by whether it makes something better for the people who use it.",
+      "Genie is an independent digital technology company building products, platforms, and intelligent digital experiences. We turn ideas into meaningful solutions through technology, design, and innovation — creating products that solve real problems and open new possibilities.",
     visionHeading: "Our vision",
-    visionP1:
-      "A world where good ideas don’t die in a notebook. Where the distance between “someone should build this” and “this exists, and it works” is as short as possible.",
-    visionP2:
-      "That is what Genie is for: turning ambitious ideas into digital products, platforms, and experiences that people can actually use — starting with real problems in real places, like Port Said and Qena, and growing from there.",
+    visionText:
+      "To help build a smarter, more connected digital future — through technology products and solutions that make ideas truly valuable.",
+    missionHeading: "Our mission",
+    missionText:
+      "Turning ideas into useful digital products that combine creativity, technology, and design — solving real problems.",
     philosophyHeading: "Our philosophy",
     philosophyQuote:
-      "Technology should do more than exist. It should make something better.",
+      "Technology is not an end in itself. A product's value is not in how complex it is, but in its ability to solve a problem, make people's lives easier, and create new opportunities.",
     philosophyText:
-      "Useful technology, thoughtful design, meaningful experiences. We build things that have a reason to exist — and we are comfortable leaving the rest unbuilt. Restraint is part of the craft: fewer features, done properly, beat a long list of half-finished ones.",
-    beliefsHeading: "What we believe",
-    beliefs: [
-      {
-        title: "Useful beats impressive",
-        text: "A product earns its place by being used, not by looking clever in a demo. If it doesn't help someone do something real, it isn't finished — it isn't even started.",
-      },
-      {
-        title: "Design is a decision",
-        text: "Every screen, every word, every interaction is a choice about what matters. Good design is making those choices deliberately, and being able to explain them.",
-      },
-      {
-        title: "Small, done well",
-        text: "We would rather build one thing properly than five things half-done. Focus is what lets a small studio do work that holds up.",
-      },
-      {
-        title: "Build in the open, learn in public",
-        text: "Experiments are part of the work, not a side project. Trying something, learning from it, and keeping only what works — that's how products get better.",
-      },
-    ],
+      "We build things that have a reason to exist — and we are comfortable leaving the rest unbuilt. Restraint is part of the craft: fewer features, done properly, beat a long list of half-finished ones.",
     howHeading: "How we work",
     howIntro:
       "The same approach behind every project — discover, define, build, evolve — applied as a working habit, not a slide.",

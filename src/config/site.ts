@@ -10,7 +10,7 @@ export const siteConfig = {
   name: "Genie",
   tagline: "Make Ideas Real.",
   description:
-    "Genie is a digital product studio. We design and build digital products, platforms, and experiences that turn ambitious ideas into something people can actually use.",
+    "Genie is an independent digital technology company building products, platforms, and intelligent digital experiences. We turn ideas into meaningful solutions through technology, design, and innovation — creating products that solve real problems and open new possibilities.",
 
   // TODO: set the real production domain, e.g. "https://genie.studio".
   // Used for canonical URLs, Open Graph and the sitemap.

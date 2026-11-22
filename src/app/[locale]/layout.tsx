@@ -3,6 +3,7 @@ import { IBM_Plex_Sans_Arabic, Inter, Space_Grotesk } from "next/font/google";
 import { notFound } from "next/navigation";
 import "../globals.css";
 import Navbar from "@/components/Navbar";
+import ScrollProgress from "@/components/ScrollProgress";
 import Footer from "@/components/Footer";
 import { siteConfig } from "@/config/site";
 import { getMessages, isLocale, locales, type Locale } from "@/i18n/config";
@@ -109,6 +110,7 @@ export default function LocaleLayout({
         >
           {t.nav.skip}
         </a>
+        <ScrollProgress />
         <Navbar locale={locale} t={t} />
         <main id="main">{children}</main>
         <Footer locale={locale} t={t} />

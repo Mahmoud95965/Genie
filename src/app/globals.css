@@ -78,6 +78,43 @@ body {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+/* Shared panel surface for cards (vision / mission / pillars) */
+.panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  background: #0a0a0f;
+}
+
+/* Marquee — infinite, transform-only; pauses on hover (see Marquee.tsx) */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-marquee {
+  animation: marquee 36s linear infinite;
+}
+
+/* Slow gradient shimmer for the hero headline */
+@keyframes shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+.animate-shimmer {
+  background-size: 200% auto;
+  animation: shimmer 7s ease-in-out infinite;
+}
+
 /* Subtle grain — adds texture without images */
 .grain::after {
   content: "";
