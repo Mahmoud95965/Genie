@@ -106,7 +106,7 @@ export default function ProjectCover({
         </span>
       </div>
       <span className="absolute right-5 top-4 font-display text-5xl font-bold text-white/10 md:text-6xl" aria-hidden="true">
-        {project.slug === "port-said-hub" ? "01" : project.slug === "qena-services" ? "02" : project.slug === "genie-experiments" ? "03" : project.slug === "genie-model" ? "04" : "05"}
+        {project.slug === "port-said-hub" ? "01" : project.slug === "qena-services" ? "02" : project.slug === "genie-experiments" ? "03" : project.slug === "storyworld" ? "04" : project.slug === "genie-model" ? "05" : "05"}
       </span>
     </div>
   );
