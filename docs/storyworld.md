@@ -1,13 +1,12 @@
-# Story-World Consistency Engine — M0
+# Story-World Consistency Engine — M0 + M1
 
 Genie's Story-World Consistency Engine wraps an LLM (via OpenRouter) with an
 explicit, evolving **world state** behind the chapters of a story: typed
 events, character facts, who knows which proposition, and open promises —
 each backed by a verbatim evidence quote with verified offsets. A checker
 flags contradictions with evidence and confidence, and a human decides
-repairs. The full specification lives in
-`~/workspace/user/files/genie-storyworld-muse-handoff-5f16c2b7.md.txt`
-(spec revision 2).
+repairs. The full specification is revision 2 of the Genie story-world
+handoff (the spec file the owner supplied).
 
 ## What M0 is
 
@@ -48,12 +47,64 @@ a recording; zero network calls**:
   `storyworld/fixtures/llm-recordings/extract-chapter-1.json` (the recorded
   extractor response for chapter 1, equal to the gold extraction).
 
-## What is NOT built yet (M1+)
+## What M1 is
 
-- **M1 (not built):** extraction review queue, commit ledger, rule checker
-  (`DEAD_ACTS`, `KNOWLEDGE_LEAK`, `TWO_PLACES`, `PROMISE_OVERDUE`,
-  `LOCATION_TELEPORT`), projected state, findings. The expected findings
-  in the dev fixture are targets for M1, not results of M0.
+M1 is the offline ledger + review + checker, all in memory or local
+files — **no live calls, no real database, no UI, no public demo**:
+
+- **Repository + commit ledger** — `storyworld/lib/state/`: a
+  `StoryworldRepository` interface with an in-memory implementation
+  (a Postgres one can replace it later). Entities per spec section 3:
+  commits (linear, `commit_seq`, one `main` branch), events,
+  participants, character facts, knowledge, knowledge uses, promises,
+  propositions, evidence. Append-only: rows are never updated or
+  deleted; retractions are new rows. A commit groups accepted items
+  atomically under an optimistic head check (`HEAD_CONFLICT` on a stale
+  head, never a silent overwrite); repeated idempotency keys return the
+  original commit. Branching throws `BRANCHING_DISABLED` until M3.
+  Chapters are immutable revisions with chapter heads, created inside
+  their own commit.
+- **Extraction review queue** — `storyworld/lib/review/`: candidates
+  from the worker become pending items. Only evidence-verified items
+  (spec 6.5, reusing the M0 verifier) can be accepted; accept/reject is
+  explicit per item; a commit groups the accepted items and rejected
+  items are kept with a reason. Ambiguous quotes stay flagged and need
+  an explicit choice of occurrence, recorded — never silently picked.
+  Cross-chapter local-id references (the fixture uses globally unique
+  local ids) are resolved through caller-supplied known-id maps.
+- **Projections** — `storyworld/lib/state/projections.ts`: pure
+  functions equivalent to the spec's `v_current_events`,
+  `v_current_character_facts`, `v_current_knowledge` and
+  `v_current_promises` (status from the latest resolution, default
+  open), derived from accepted commits only, filtering retracted
+  entries.
+- **Rule checker** — `storyworld/lib/checker/rules.ts`: pure functions,
+  no LLM. `DEAD_ACTS`, `KNOWLEDGE_LEAK`, `TWO_PLACES`,
+  `PROMISE_OVERDUE`, and `LOCATION_TELEPORT` (advisory only, always
+  `uncertain`), following spec section 7 semantics: latest applicable
+  life-state selection (a resurrection is a new `alive` fact; the death
+  fact stays as history), strict `<` except witnessed same-instant for
+  knowledge, interval overlap with all bounds known for two places,
+  null bounds never confirm, open-world missing knowledge is not proof
+  (confirmed only for closed-world propositions or an explicit
+  evidenced record of non-knowledge), non-asserted or non-real events
+  never confirm. Findings store rule id, confidence, dual evidence
+  quotes with offsets, and the commit they were raised on
+  (`storyworld/lib/checker/run.ts` runs the checker and stores
+  findings; re-running on the same head does not duplicate them).
+- **Tests** — spec 10.2 M1 rows: synthetic checker cases including all
+  negatives (resurrection, flashback, adjacent intervals, null bounds,
+  closed vs open world, unknown use time, witnessed same-instant), plus
+  an end-to-end test that commits the dev fixture's gold state and runs
+  the checker: exactly the fixture's expected findings (1 `DEAD_ACTS`
+  confirmed on e4/e1, 1 `KNOWLEDGE_LEAK` confirmed on e6/كريم/p1,
+  0 `PROMISE_OVERDUE`, 0 `TWO_PLACES`, e7 not flagged). The fixture's
+  expected findings are test targets for the implementation, NOT an
+  accuracy metric. The M0 demo job test is labelled a plumbing test:
+  it replays a recording and passes by construction.
+
+## What is NOT built yet (M2+)
+
 - **M2 (not built):** writer with state slices, repair proposer, private
   A/B evaluation on a held-out fixture.
 - **M3 (not built):** branching UI — fork, side-by-side, conflict handling.
@@ -73,21 +124,61 @@ it is a dev fixture, usable for prompt tuning, never the source of
 reported results. A held-out fixture, written later by the owner, is the
 only source of reported numbers.
 
+**No real model has ever been run on this.** Every extraction so far
+replayed a recorded fixture; the M0 demo job and the M1 end-to-end test
+pass by construction against gold data. There is no accuracy number,
+and none is claimed.
+
+## Open questions (M1)
+
+These came up while implementing M1 and were not silently decided:
+
+1. **LOCATION_TELEPORT — "distant" is undefined.** The spec has no
+   location or distance model, so "distant locations" cannot be
+   determined from free-text location strings. The rule is implemented
+   with a caller-supplied `isDistant` predicate and yields no findings
+   without one.
+2. **Promise resolutions have no defined mapping.** The extractor
+   schema allows `status_change` of `fulfilled` / `violated` /
+   `abandoned`, but the spec never defines how such an item maps to
+   `promise_entries` vs `promise_resolutions` — the output carries no
+   promise identity to resolve against. M1 accepts only `raised` and
+   rejects the rest at commit time with a per-item validation error.
+3. **Explicit records of non-knowledge have no ledger representation.**
+   The spec names them as a confirmed-basis for `KNOWLEDGE_LEAK` but
+   defines no table for them. M1 accepts them only as a
+   caller-supplied checker option, not as stored state.
+4. **DEAD_ACTS tie-breaks.** Two life-state facts with equal `span_end`
+   in the same commit are unspecified by the spec SQL (it orders by
+   `span_end desc, commit_seq desc`); M1 breaks ties by insertion order
+   (later inserted wins). Also: a resurrection event that casts the
+   character as actor/speaker is itself flagged by the spec SQL (its
+   own alive fact ends at the same story point, and the strict `<`
+   excludes it) — the resurrection must be represented as an observed
+   event for the later act to clear.
+5. **TWO_PLACES touching intervals.** The overlap formula uses `<=`,
+   so intervals sharing one endpoint count as overlapping. Followed
+   literally.
+6. **KNOWLEDGE_LEAK learn-event reality.** The spec SQL does not filter
+   the learn event by certainty/reality_scope; followed literally (only
+   span order and channel conditions matter).
+
 ## How to run
 
 ```bash
-npm test              # all M0 tests, fully offline, zero network calls
+npm test              # all M0+M1 tests, fully offline, zero network calls
 npm run storyworld:m0 # offline demo job: extract chapter 1 end to end
 npm run build         # Next.js production build (type-checks storyworld/* too)
 ```
 
-## What M0 does not involve
+## What M0+M1 do not involve
 
 - **No live calls.** `live_calls.enabled` is `false`; no model slug is
   configured. Turning live calls on requires the owner to set a monthly
   USD cap and at least one fully priced approved model — the client
   refuses otherwise.
-- **No real database.** The migration file is versioned text only.
+- **No real database.** The migration file is versioned text only; M1
+  storage is in-memory behind an interface.
 - **No deploy.** Nothing here is deployed or published.
 - **No secrets.** No key or credential is stored anywhere in this repo;
   a live key would live only in server-side `OPENROUTER_API_KEY`, never

@@ -1,5 +1,6 @@
 /**
- * M0 offline demo job (spec section 11).
+ * M0 offline demo job (spec section 11) — PLUMBING TEST, not an accuracy
+ * test.
  *
  * Run with: `npm run storyworld:m0`
  *
@@ -8,6 +9,11 @@
  * and prints the resulting candidates + telemetry. Zero network calls:
  * the client is constructed with a fetch that throws if ever invoked, and
  * the test fails if any live call is attempted.
+ *
+ * It replays a recording that is equal to the gold answer, so it passes
+ * by construction. It proves plumbing (schema validation, offset
+ * verification, job flow) and says NOTHING about model extraction
+ * quality. Never describe it as extraction accuracy.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -17,8 +23,8 @@ import { TelemetryLog } from "../lib/telemetry";
 import { JobQueue } from "../lib/jobs/queue";
 import { runNext, type ExtractJobResult } from "../lib/jobs/worker";
 
-describe("M0 offline demo job", () => {
-  it("extracts chapter 1 of dev-short-story-v1 end to end, offline", async () => {
+describe("M0 offline demo job (plumbing test — replays a recording; passes by construction)", () => {
+  it("extracts chapter 1 of dev-short-story-v1 end to end, offline (plumbing only)", async () => {
     // The test FAILS if live calls are enabled anywhere in this path.
     const config = loadConfig();
     expect(config.live_calls.enabled).toBe(false);
