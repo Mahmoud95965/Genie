@@ -9,13 +9,21 @@ export interface Project {
   /** Accent used for this project's visual identity. */
   accent: "blue" | "violet" | "cyan";
   stack: string[];
-  links: { label: string; href: string }[];
+  links: { label: string; labelAr?: string; href: string }[];
   challenge: string;
   concept: string;
   design: string;
   development: string;
   /** Honest note shown on the detail page when a project is not finished. */
   note?: string;
+  /** Arabic translations of the copy above (names, stack and URLs stay Latin). */
+  shortAr: string;
+  categoryAr: string;
+  challengeAr: string;
+  conceptAr: string;
+  designAr: string;
+  developmentAr: string;
+  noteAr?: string;
 }
 
 /**
@@ -33,7 +41,7 @@ export const projects: Project[] = [
     accent: "blue",
     stack: ["Next.js", "TypeScript", "Supabase", "MapLibre"],
     links: [
-      { label: "Visit the live site", href: "https://www.port-said-hub.site/" },
+      { label: "Visit the live site", labelAr: "زيارة الموقع الحي", href: "https://www.port-said-hub.site/" },
       { label: "GitHub — Mahmoud95965/PortSaid", href: "https://github.com/Mahmoud95965/PortSaid" },
     ],
     challenge:
@@ -44,6 +52,17 @@ export const projects: Project[] = [
       "Arabic-first, RTL, built around the map as the primary way to explore. Clear categories — transport, restaurants, housing, points and rewards — with a calm blue and deep-navy identity that reads as a civic utility, not a marketing page.",
     development:
       "Next.js (App Router) with TypeScript, Supabase for database and auth, and MapLibre GL for the interactive map. Includes a PWA manifest, QR support, and an admin area with registration, login and password change. Hosted on Vercel.",
+    shortAr:
+      "منصة رقمية تربط الناس بالخدمات والأماكن والتجارب والفرص في بورسعيد.",
+    categoryAr: "منصة ويب · منصة مدن",
+    challengeAr:
+      "كانت خدمات بورسعيد وأماكنها وفرصها متناثرة — يصعب اكتشافها في مكان واحد، بلغة واحدة، بمعلومات يمكن الوثوق بها. كانت المدينة بحاجة إلى نقطة بداية واحدة موثوقة، لا إلى دليل آخر يتقادم.",
+    conceptAr:
+      "مركز واحد للمدينة: دليل رسمي للأماكن مع خريطة تفاعلية، ومساعد ذكاء اصطناعي للمدينة يجيب عن الأسئلة حول بورسعيد، ولوحة تحكم للإدارة حتى تظل المعلومات محدّثة. بُني كمنصة يمكن أن تكبر مع المدينة، لا كموقع لمرة واحدة.",
+    designAr:
+      "العربية أولاً، ومن اليمين إلى اليسار، والخريطة هي الطريقة الأساسية للاستكشاف. فئات واضحة — المواصلات والمطاعم والسكن والنقاط والمكافآت — بهوية زرقاء هادئة وكحلية عميقة تُقرأ كخدمة مدنية، لا كصفحة تسويقية.",
+    developmentAr:
+      "Next.js (App Router) مع TypeScript، وSupabase لقاعدة البيانات والمصادقة، وMapLibre GL للخريطة التفاعلية. يشمل بيان PWA ودعم QR ومنطقة إدارة فيها التسجيل وتسجيل الدخول وتغيير كلمة المرور. مستضاف على Vercel.",
   },
   {
     slug: "qena-services",
@@ -66,6 +85,18 @@ export const projects: Project[] = [
     development:
       "React with Vite as a PWA, Supabase with Row Level Security for data and access control. The platform is in development — features and coverage are still being shaped.",
     note: "In development — what is shown here is the direction and the work so far, not a finished product.",
+    shortAr:
+      "مبادرة رقمية لتنظيم وربط الخدمات المحلية داخل قنا — تربط السكان بفنيين محليين موثوقين.",
+    categoryAr: "منصة ويب · سوق خدمات",
+    challengeAr:
+      "كان العثور على فني موثوق في قنا يعني أن تسأل من حولك وأن تأمل. لم تكن هناك طريقة منظمة وموثوقة ليجد السكان الخدمات المحلية — ولا طريقة عادلة ليجد الفنيون الجيدون عملاً.",
+    conceptAr:
+      "سوق يربط سكان قنا بفنيين محليين موثوقين، منظّم حسب الخدمة والمنطقة، مع طبقة الثقة مبنية فيه منذ البداية لا مضافة لاحقاً.",
+    designAr:
+      "العربية أولاً ومن اليمين إلى اليسار، ومصمم كتطبيق ويب تقدمي (PWA) يعمل كتطبيق على الهواتف التي يستخدمها الناس فعلاً. تدفقات بسيطة ومباشرة: ابحث عن خدمة، وابحث عن فني، وأنجز العمل.",
+    developmentAr:
+      "React مع Vite كتطبيق ويب تقدمي، وSupabase مع أمان مستوى الصفوف (Row Level Security) للبيانات والتحكم في الوصول. المنصة قيد التطوير — الميزات والتغطية ما زالت تتشكل.",
+    noteAr: "قيد التطوير — ما يظهر هنا هو الاتجاه والعمل حتى الآن، وليس منتجاً مكتملاً.",
   },
   {
     slug: "genie-experiments",
@@ -86,6 +117,18 @@ export const projects: Project[] = [
     development:
       "Built with the same stack discipline as client work — modern web tooling, accessible by default — but with room to try approaches that would be too risky in a production platform.",
     note: "Concept / experiment — nothing here is presented as a finished product or a result.",
+    shortAr:
+      "أدوات ومفاهيم وتجارب رقمية تجريبية تُطوَّر تحت هوية Genie.",
+    categoryAr: "تجارب",
+    challengeAr:
+      "نادراً ما تبدأ المنتجات الجيدة كخطة مكتملة. تبدأ كسؤال يستحق الاختبار — أداة صغيرة، أو تفاعل غريب، أو فكرة قد لا تنجح.",
+    conceptAr:
+      "مساحة داخل Genie لهذا الاختبار: أدوات تجريبية صغيرة ومفاهيم وتجارب رقمية، تُبنى بسرعة وتُجرَّب بصدق، ويُحتفظ فقط بما يثبت جدارته. بعضها يصبح منتجات. وبعضها يبقى تجارب. وكلتا النتيجتين مفيدتان.",
+    designAr:
+      "لكل تجربة هويتها البصرية وقواعدها الخاصة. الهدف ليس الاتساق — بل الفضول، بمعايير عالية من الحرفية.",
+    developmentAr:
+      "تُبنى بنفس انضباط التقنيات المستخدمة في أعمال العملاء — أدوات ويب حديثة، وسهولة وصول افتراضية — مع مساحة لتجربة أساليب قد تكون محفوفة بالمخاطر في منصة إنتاجية.",
+    noteAr: "مفهوم / تجربة — لا يُعرض هنا أي شيء على أنه منتج مكتمل أو نتيجة.",
   },
 ];
 

@@ -1,14 +1,18 @@
-import type { Project } from "@/data/projects";
+import type { LocalizedProject } from "@/i18n/project";
+import type { Locale } from "@/i18n/config";
 
 /**
  * Cover visual for a project — pure CSS/SVG composition, no stock photos.
  * Each project gets its own visual identity through accent + motif.
+ * Labels come from the localized project (status/category in the page locale).
  */
 export default function ProjectCover({
   project,
+  locale,
   large = false,
 }: {
-  project: Project;
+  project: LocalizedProject;
+  locale: Locale;
   large?: boolean;
 }) {
   const palette =
@@ -24,7 +28,9 @@ export default function ProjectCover({
         large ? "aspect-[16/9]" : "aspect-[4/3]"
       }`}
       role="img"
-      aria-label={`Visual identity for ${project.name}`}
+      aria-label={
+        locale === "ar" ? `الهوية البصرية لمشروع ${project.name}` : `Visual identity for ${project.name}`
+      }
     >
       {/* glow */}
       <div className={`absolute -right-16 -top-16 h-64 w-64 rounded-full ${palette.glow} blur-3xl`} aria-hidden="true" />

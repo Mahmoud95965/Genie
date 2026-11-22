@@ -56,6 +56,23 @@ body {
   line-height: 0.95;
 }
 
+/* Arabic: never letter-space Arabic script — it breaks letter joining.
+   Display headings and eyebrow labels render with natural spacing. */
+[dir="rtl"] .display {
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+[dir="rtl"] .tracking-\[0\.2em\],
+[dir="rtl"] .tracking-\[0\.24em\],
+[dir="rtl"] .tracking-\[0\.28em\] {
+  letter-spacing: 0;
+}
+/* Arabic pages use IBM Plex Sans Arabic for display type too — the Latin
+   display font (Space Grotesk) has no Arabic glyphs. */
+[lang="ar"] .font-display {
+  font-family: var(--font-arabic), var(--font-display), system-ui, sans-serif;
+}
+
 /* Fine hairline used across the site instead of boxes */
 .hairline {
   border-color: rgba(255, 255, 255, 0.08);

@@ -30,12 +30,6 @@ export const siteConfig = {
     x: "", // TODO
     instagram: "", // TODO
   },
-
-  nav: [
-    { label: "Home", href: "/" },
-    { label: "Work", href: "/work" },
-    { label: "About", href: "/about" },
-  ],
 } as const;
 
 export type SiteConfig = typeof siteConfig;

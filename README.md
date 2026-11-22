@@ -27,13 +27,44 @@ Requires Node 18+ (tested on Node 24 / npm 10).
 
 ## Pages
 
+All content lives under a locale prefix — `/en` and `/ar`. `/` redirects
+to `/en`. Legacy non-locale URLs (`/work`, `/about`, `/contact`,
+`/work/[slug]`) redirect to their English versions.
+
 | Route | Page |
 | --- | --- |
-| `/` | Home — hero with generative canvas artwork, selected work, capabilities, approach, philosophy, closing CTA |
-| `/work` | Portfolio — all projects |
-| `/work/[slug]` | Project case study — Challenge, Concept, Design direction, Development |
-| `/about` | Vision, philosophy, beliefs, how we work, ambitions |
-| `/contact` | Contact form (interface only — see below) |
+| `/{locale}` | Home — hero with generative canvas artwork and the Genie logo, selected work, capabilities, approach, philosophy, closing CTA |
+| `/{locale}/work` | Portfolio — all projects |
+| `/{locale}/work/[slug]` | Project case study — Challenge, Concept, Design direction, Development |
+| `/{locale}/about` | Vision, philosophy, beliefs, how we work, ambitions |
+| `/{locale}/contact` | Contact form (interface only — see below) |
+
+## Languages (EN / AR)
+
+- Routes are `app/[locale]` with locales `en` and `ar`; the locale is
+  carried by the URL, not cookies.
+- Dictionaries live in `src/i18n/messages/` (`en.ts` is the source,
+  `ar.ts` must satisfy the same type). Arabic is professional, natural
+  Arabic; brand name "Genie", project names and tech terms stay Latin.
+- Arabic pages render `<html lang="ar" dir="rtl">` with the IBM Plex
+  Sans Arabic font (via `next/font/google`); English keeps Inter +
+  Space Grotesk. Letter-spacing is disabled for Arabic script (it
+  breaks letter joining), and directional arrows flip in RTL.
+- The Navbar (desktop + mobile menu) has a language switcher linking
+  to the same page in the other locale.
+- SEO is per locale: unique title/description, `hreflang` alternates,
+  and `sitemap.xml` lists both locale versions of every page.
+
+## Logo
+
+The real Genie logo — the stylised G with the smoke swirl, violet →
+blue → cyan/teal on dark navy — lives at `public/logo/genie-logo.jpg`
+(copied as-is from the file Mahmoud supplied; never altered, recoloured
+or redrawn). It is used in the Navbar, Footer, home hero eyebrow,
+favicon (`/logo/genie-logo.jpg` via metadata icons, plus a real
+`public/favicon.ico` generated from it) and the Open Graph image.
+The site is dark-first, so the logo's dark background blends in; it
+never appears on a light background.
 
 Projects are real, in `src/data/projects.ts`:
 
@@ -93,13 +124,15 @@ To make submissions actually send, follow
 ```
 src/
   app/            # App Router pages + layout + robots/sitemap
-    work/[slug]/  # project case studies (static params)
+    [locale]/     # en + ar: home, work, work/[slug], about, contact
   components/     # Navbar, Footer, HeroVisual, ProjectCover,
                   # Capabilities, ContactForm, Reveal
   config/site.ts  # site-wide settings + TODOs (domain, email, socials)
-  data/projects.ts# real project data only
+  data/projects.ts# real project data only (EN + AR copy)
+  i18n/           # locales, dictionaries, project localisation
 public/
-  favicon.svg  og-image.svg
+  logo/genie-logo.jpg  # the real Genie logo (do not alter)
+  favicon.ico          # generated from the logo
 docs/
   contact-form.md # backend integration requirements
 ```

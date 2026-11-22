@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUpRight, Menu, X } from "lucide-react";
-import { siteConfig } from "@/config/site";
+import { ArrowUpRight, Languages, Menu, X } from "lucide-react";
+import { localizedPath, stripLocale, type Locale } from "@/i18n/config";
+import type { Messages } from "@/i18n/messages/en";
 
-export default function Navbar() {
+export default function Navbar({ locale, t }: { locale: Locale; t: Messages }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
@@ -31,6 +33,22 @@ export default function Navbar() {
     setOpen(false);
   }, [pathname]);
 
+  const navItems = [
+    { label: t.nav.home, href: localizedPath(locale, "/") },
+    { label: t.nav.work, href: localizedPath(locale, "/work") },
+    { label: t.nav.about, href: localizedPath(locale, "/about") },
+  ];
+  const contactHref = localizedPath(locale, "/contact");
+  const homeHref = localizedPath(locale, "/");
+
+  // Language switcher: same page, other locale (locale lives in the URL).
+  const otherLocale: Locale = locale === "en" ? "ar" : "en";
+  const switchHref = localizedPath(otherLocale, stripLocale(pathname));
+  const switchLabel = locale === "en" ? t.nav.switchToArabic : t.nav.switchToEnglish;
+
+  const isActive = (href: string) =>
+    pathname === href || (href !== homeHref && pathname.startsWith(`${href}/`));
+
   return (
     <>
       <header
@@ -45,27 +63,35 @@ export default function Navbar() {
           aria-label="Main navigation"
         >
           <Link
-            href="/"
-            className="group flex items-baseline gap-2"
+            href={homeHref}
+            className="group flex items-center gap-3"
             aria-label="Genie — home"
           >
+            <Image
+              src="/logo/genie-logo.jpg"
+              alt=""
+              width={40}
+              height={40}
+              className="h-10 w-10 shrink-0 rounded-lg object-cover"
+              priority
+            />
             <span className="font-display text-[22px] font-bold tracking-[0.18em] text-white">
               GENIE
             </span>
             <span className="hidden h-1.5 w-1.5 rounded-full bg-sky sm:inline-block" aria-hidden="true" />
             <span className="hidden text-[11px] uppercase tracking-[0.2em] text-zinc-500 transition-colors group-hover:text-zinc-300 md:inline">
-              Digital Product Studio
+              {t.nav.studio}
             </span>
           </Link>
 
           <ul className="hidden items-center gap-9 md:flex">
-            {siteConfig.nav.map((item) => (
+            {navItems.map((item) => (
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  aria-current={pathname === item.href ? "page" : undefined}
+                  aria-current={isActive(item.href) ? "page" : undefined}
                   className={`text-sm transition-colors ${
-                    pathname === item.href
+                    isActive(item.href)
                       ? "text-white"
                       : "text-zinc-400 hover:text-white"
                   }`}
@@ -78,17 +104,26 @@ export default function Navbar() {
 
           <div className="flex items-center gap-3">
             <Link
-              href="/contact"
+              href={switchHref}
+              lang={otherLocale}
+              aria-label={t.nav.switchLabel}
+              className="inline-flex items-center gap-1.5 rounded-full border hairline px-3.5 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-sky/60 hover:text-white"
+            >
+              <Languages className="h-4 w-4 text-sky" aria-hidden="true" />
+              {switchLabel}
+            </Link>
+            <Link
+              href={contactHref}
               className="group hidden items-center gap-1.5 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-sky sm:inline-flex"
             >
-              Let&rsquo;s Talk
-              <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" />
+              {t.nav.letsTalk}
+              <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 rtl:-scale-x-100 rtl:group-hover:-translate-x-0.5" aria-hidden="true" />
             </Link>
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
               aria-expanded={open}
-              aria-label={open ? "Close menu" : "Open menu"}
+              aria-label={open ? t.nav.closeMenu : t.nav.openMenu}
               className="inline-flex h-10 w-10 items-center justify-center rounded-full border hairline text-white md:hidden"
             >
               {open ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
@@ -109,7 +144,7 @@ export default function Navbar() {
           >
             <nav aria-label="Mobile navigation">
               <ul className="space-y-2">
-                {[...siteConfig.nav, { label: "Contact", href: "/contact" }].map((item, i) => (
+                {[...navItems, { label: t.nav.contact, href: contactHref }].map((item, i) => (
                   <motion.li
                     key={item.href}
                     initial={{ opacity: 0, y: 24 }}
@@ -130,22 +165,37 @@ export default function Navbar() {
                   </motion.li>
                 ))}
               </ul>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.35 }}
+                className="pt-6"
+              >
+                <Link
+                  href={switchHref}
+                  lang={otherLocale}
+                  className="inline-flex items-center gap-2 rounded-full border hairline px-5 py-3 text-sm font-medium text-zinc-200"
+                >
+                  <Languages className="h-4 w-4 text-sky" aria-hidden="true" />
+                  {switchLabel}
+                </Link>
+              </motion.div>
             </nav>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4 }}
             >
-              <p className="text-sm text-zinc-400">Make Ideas Real.</p>
+              <p className="text-sm text-zinc-400">{t.nav.tagline}</p>
               <p className="mt-1 text-sm text-zinc-600">
-                A new independent digital product studio.
+                {t.nav.studioNote}
               </p>
               <Link
-                href="/contact"
+                href={contactHref}
                 className="mt-6 flex items-center justify-center gap-2 rounded-full bg-white py-4 text-base font-medium text-black"
               >
-                Let&rsquo;s Talk
-                <ArrowUpRight className="h-5 w-5" aria-hidden="true" />
+                {t.nav.letsTalk}
+                <ArrowUpRight className="h-5 w-5 rtl:-scale-x-100" aria-hidden="true" />
               </Link>
             </motion.div>
           </motion.div>
