@@ -8,6 +8,8 @@ export interface Project {
   status: ProjectStatus;
   /** Accent used for this project's visual identity. */
   accent: "blue" | "violet" | "cyan";
+  /** Real cover image (public path) supplied for the project, shown on its card. */
+  cover?: string;
   stack: string[];
   links: { label: string; labelAr?: string; href: string }[];
   challenge: string;
@@ -39,6 +41,7 @@ export const projects: Project[] = [
     category: "Web Platform · City Platform",
     status: "Live",
     accent: "blue",
+    cover: "/projects/port-said-hub-cover.jpg",
     stack: ["Next.js", "TypeScript", "Supabase", "MapLibre"],
     links: [
       { label: "Visit the live site", labelAr: "زيارة الموقع الحي", href: "https://www.port-said-hub.site/" },

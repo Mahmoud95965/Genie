@@ -1,9 +1,12 @@
+import Image from "next/image";
 import type { LocalizedProject } from "@/i18n/project";
 import type { Locale } from "@/i18n/config";
 
 /**
- * Cover visual for a project — pure CSS/SVG composition, no stock photos.
- * Each project gets its own visual identity through accent + motif.
+ * Cover visual for a project.
+ * When a project has a real supplied cover image, it is shown whole
+ * (object-contain on the artwork's own cream background, so nothing is
+ * cropped). Otherwise the pure CSS/SVG composition is used — no stock photos.
  * Labels come from the localized project (status/category in the page locale).
  */
 export default function ProjectCover({
@@ -32,40 +35,56 @@ export default function ProjectCover({
         locale === "ar" ? `الهوية البصرية لمشروع ${project.name}` : `Visual identity for ${project.name}`
       }
     >
-      {/* glow */}
-      <div className={`absolute -right-16 -top-16 h-64 w-64 rounded-full ${palette.glow} blur-3xl`} aria-hidden="true" />
-      <div className="absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-white/5 blur-3xl" aria-hidden="true" />
-      {/* grid */}
-      <div
-        className="absolute inset-0 opacity-[0.14]"
-        aria-hidden="true"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
-          backgroundSize: "44px 44px",
-        }}
-      />
-      {/* motif per project */}
-      {project.slug === "port-said-hub" && (
-        <svg viewBox="0 0 400 240" className="absolute inset-0 h-full w-full" aria-hidden="true">
-          <circle cx="200" cy="120" r="52" fill="none" stroke="#38BDF8" strokeWidth="1.5" opacity="0.8" />
-          <circle cx="200" cy="120" r="86" fill="none" stroke="#2563EB" strokeWidth="1" opacity="0.5" />
-          <path d="M200 34v40M200 166v40M114 120h40M246 120h40" stroke="#38BDF8" strokeWidth="1" opacity="0.5" />
-          <circle cx="200" cy="120" r="6" fill="#38BDF8" />
-          <circle cx="286" cy="120" r="4" fill="#60A5FA" />
-          <circle cx="200" cy="34" r="4" fill="#60A5FA" />
-        </svg>
-      )}
-      {project.slug === "storyworld" && (
-        <svg viewBox="0 0 400 240" className="absolute inset-0 h-full w-full" aria-hidden="true">
-          <path d="M200 40 V200" stroke="#22D3EE" strokeWidth="1" opacity="0.5" />
-          {[56, 120, 184].map((y, i) => (
-            <g key={y}>
-              <rect x={140} y={y - 16} width={120} height={32} rx={8} fill="none" stroke="#22D3EE" strokeWidth="1.5" opacity={0.9 - i * 0.2} />
-              <circle cx={200} cy={y} r={5} fill="#67E8F9" />
-            </g>
-          ))}
-        </svg>
+      {project.cover ? (
+        <Image
+          src={project.cover}
+          alt=""
+          fill
+          sizes={large ? "(max-width: 768px) 100vw, 1200px" : "(max-width: 768px) 100vw, 600px"}
+          className="object-contain"
+          style={{ backgroundColor: "#F2EDE7" }}
+        />
+      ) : (
+        <>
+          {/* glow */}
+          <div className={`absolute -right-16 -top-16 h-64 w-64 rounded-full ${palette.glow} blur-3xl`} aria-hidden="true" />
+          <div className="absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-white/5 blur-3xl" aria-hidden="true" />
+          {/* grid */}
+          <div
+            className="absolute inset-0 opacity-[0.14]"
+            aria-hidden="true"
+            style={{
+              backgroundImage:
+                "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
+              backgroundSize: "44px 44px",
+            }}
+          />
+          {/* motif per project */}
+          {project.slug === "port-said-hub" && (
+            <svg viewBox="0 0 400 240" className="absolute inset-0 h-full w-full" aria-hidden="true">
+              <circle cx="200" cy="120" r="52" fill="none" stroke="#38BDF8" strokeWidth="1.5" opacity="0.8" />
+              <circle cx="200" cy="120" r="86" fill="none" stroke="#2563EB" strokeWidth="1" opacity="0.5" />
+              <path d="M200 34v40M200 166v40M114 120h40M246 120h40" stroke="#38BDF8" strokeWidth="1" opacity="0.5" />
+              <circle cx="200" cy="120" r="6" fill="#38BDF8" />
+              <circle cx="286" cy="120" r="4" fill="#60A5FA" />
+              <circle cx="200" cy="34" r="4" fill="#60A5FA" />
+            </svg>
+          )}
+          {project.slug === "storyworld" && (
+            <svg viewBox="0 0 400 240" className="absolute inset-0 h-full w-full" aria-hidden="true">
+              <path d="M200 40 V200" stroke="#22D3EE" strokeWidth="1" opacity="0.5" />
+              {[56, 120, 184].map((y, i) => (
+                <g key={y}>
+                  <rect x={140} y={y - 16} width={120} height={32} rx={8} fill="none" stroke="#22D3EE" strokeWidth="1.5" opacity={0.9 - i * 0.2} />
+                  <circle cx={200} cy={y} r={5} fill="#67E8F9" />
+                </g>
+              ))}
+            </svg>
+          )}
+          <span className="absolute right-5 top-4 font-display text-5xl font-bold text-white/10 md:text-6xl" aria-hidden="true">
+            {project.slug === "port-said-hub" ? "01" : "02"}
+          </span>
+        </>
       )}
       {/* label */}
       <div className="absolute bottom-4 left-4 flex items-center gap-2 md:bottom-6 md:left-6">
@@ -76,9 +95,6 @@ export default function ProjectCover({
           {project.status}
         </span>
       </div>
-      <span className="absolute right-5 top-4 font-display text-5xl font-bold text-white/10 md:text-6xl" aria-hidden="true">
-        {project.slug === "port-said-hub" ? "01" : "02"}
-      </span>
     </div>
   );
 }
