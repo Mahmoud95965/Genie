@@ -23,6 +23,8 @@ export default function HeroVisual() {
     let raf = 0;
     let w = 0;
     let h = 0;
+    let running = false;
+    let inView = true;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const mouse = { x: -9999, y: -9999 };
 
@@ -37,7 +39,9 @@ export default function HeroVisual() {
       canvas.width = w * dpr;
       canvas.height = h * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.min(90, Math.floor((w * h) / 9000));
+      // Fewer particles on small screens — the field stays light on phones.
+      const small = w < 640;
+      const count = Math.min(small ? 36 : 90, Math.floor((w * h) / 12000));
       points = Array.from({ length: count }, () => ({
         x: Math.random() * w,
         y: Math.random() * h,
@@ -92,8 +96,33 @@ export default function HeroVisual() {
     };
 
     const tick = () => {
+      if (!running) return;
       draw();
       raf = requestAnimationFrame(tick);
+    };
+
+    const start = () => {
+      if (running || reduce) return;
+      running = true;
+      raf = requestAnimationFrame(tick);
+    };
+    const stop = () => {
+      running = false;
+      cancelAnimationFrame(raf);
+    };
+    // Pause the loop whenever the hero is scrolled out of view or the
+    // tab is hidden, and resume when it comes back.
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        inView = entry.isIntersecting;
+        if (inView && !document.hidden) start();
+        else stop();
+      },
+      { threshold: 0 }
+    );
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else if (inView) start();
     };
 
     const onMove = (e: PointerEvent) => {
@@ -110,13 +139,16 @@ export default function HeroVisual() {
     if (reduce) {
       draw(); // one static frame
     } else {
-      tick();
+      observer.observe(canvas);
+      document.addEventListener("visibilitychange", onVisibility);
       window.addEventListener("pointermove", onMove, { passive: true });
       window.addEventListener("pointerleave", onLeave);
     }
     window.addEventListener("resize", resize);
     return () => {
-      cancelAnimationFrame(raf);
+      stop();
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerleave", onLeave);
       window.removeEventListener("resize", resize);

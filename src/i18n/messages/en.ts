@@ -37,7 +37,6 @@ export const enMessages = {
       "Genie is an independent digital venture studio focused on imagining, building, and growing digital products, platforms, and ventures.",
     explore: "Explore our ventures",
     build: "Let’s build something",
-    canvasLabel: "Digital energy — move your cursor",
     scroll: "Scroll — our ventures below",
   },
   home: {
