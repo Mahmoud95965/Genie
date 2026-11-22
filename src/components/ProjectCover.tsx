@@ -56,35 +56,6 @@ export default function ProjectCover({
           <circle cx="200" cy="34" r="4" fill="#60A5FA" />
         </svg>
       )}
-      {project.slug === "qena-services" && (
-        <svg viewBox="0 0 400 240" className="absolute inset-0 h-full w-full" aria-hidden="true">
-          {[0, 1, 2].map((i) => (
-            <g key={i}>
-              <rect x={90 + i * 90} y={70 + i * 18} width="64" height="64" rx="14" fill="none" stroke="#8B5CF6" strokeWidth="1.5" opacity={0.9 - i * 0.2} />
-              <circle cx={122 + i * 90} cy={102 + i * 18} r="5" fill="#A78BFA" />
-            </g>
-          ))}
-          <path d="M154 102 L180 120 M244 120 L270 138" stroke="#8B5CF6" strokeWidth="1" opacity="0.6" />
-        </svg>
-      )}
-      {project.slug === "genie-experiments" && (
-        <svg viewBox="0 0 400 240" className="absolute inset-0 h-full w-full" aria-hidden="true">
-          <path d="M60 180 L140 70 L200 150 L270 50 L340 170" fill="none" stroke="#22D3EE" strokeWidth="1.5" opacity="0.8" />
-          <circle cx="140" cy="70" r="5" fill="#22D3EE" />
-          <circle cx="270" cy="50" r="5" fill="#22D3EE" />
-          <circle cx="200" cy="150" r="4" fill="#67E8F9" />
-        </svg>
-      )}
-      {project.slug === "genie-model" && (
-        <svg viewBox="0 0 400 240" className="absolute inset-0 h-full w-full" aria-hidden="true">
-          <path d="M70 170 L150 80 L230 160 L310 60" fill="none" stroke="#A78BFA" strokeWidth="1.5" opacity="0.8" />
-          <circle cx="70" cy="170" r="6" fill="#A78BFA" />
-          <circle cx="150" cy="80" r="6" fill="#C4B5FD" />
-          <circle cx="230" cy="160" r="5" fill="#A78BFA" />
-          <circle cx="310" cy="60" r="6" fill="#C4B5FD" />
-          <circle cx="200" cy="120" r="3" fill="#8B5CF6" />
-        </svg>
-      )}
       {project.slug === "storyworld" && (
         <svg viewBox="0 0 400 240" className="absolute inset-0 h-full w-full" aria-hidden="true">
           <path d="M200 40 V200" stroke="#22D3EE" strokeWidth="1" opacity="0.5" />
@@ -106,7 +77,7 @@ export default function ProjectCover({
         </span>
       </div>
       <span className="absolute right-5 top-4 font-display text-5xl font-bold text-white/10 md:text-6xl" aria-hidden="true">
-        {project.slug === "port-said-hub" ? "01" : project.slug === "qena-services" ? "02" : project.slug === "genie-experiments" ? "03" : project.slug === "storyworld" ? "04" : project.slug === "genie-model" ? "05" : "05"}
+        {project.slug === "port-said-hub" ? "01" : "02"}
       </span>
     </div>
   );

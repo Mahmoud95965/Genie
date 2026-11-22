@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { IBM_Plex_Sans_Arabic, Inter, Space_Grotesk } from "next/font/google";
 import { notFound } from "next/navigation";
 import "../globals.css";
-import SiteChrome from "@/components/SiteChrome";
+import Navbar from "@/components/Navbar";
+import ScrollProgress from "@/components/ScrollProgress";
+import Footer from "@/components/Footer";
 import { siteConfig } from "@/config/site";
 import { getMessages, isLocale, locales, type Locale } from "@/i18n/config";
 import { openGraph } from "@/lib/og";
@@ -37,7 +39,7 @@ export async function generateMetadata({
       template: "%s — Genie",
     },
     description: t.meta.description,
-    keywords: ["Genie", "digital venture studio", "web platforms", "UI/UX design", "AI-powered experiences", "Port Said Hub", "Qena Services"],
+    keywords: ["Genie", "digital venture studio", "web platforms", "UI/UX design", "AI-powered experiences", "Port Said Hub"],
     authors: [{ name: "Genie" }],
     alternates: {
       canonical: `/${locale}`,
@@ -108,9 +110,10 @@ export default function LocaleLayout({
         >
           {t.nav.skip}
         </a>
-        <SiteChrome locale={locale} t={t}>
-          {children}
-        </SiteChrome>
+        <ScrollProgress />
+        <Navbar locale={locale} t={t} />
+        <main id="main">{children}</main>
+        <Footer locale={locale} t={t} />
       </body>
     </html>
   );

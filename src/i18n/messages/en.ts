@@ -7,9 +7,7 @@ export const enMessages = {
     description:
       "Genie is an independent digital venture studio focused on imagining, building, and growing digital products, platforms, and ventures.",
     workDescription:
-      "Our ventures from Genie — Port Said Hub, Qena Services Platform, Genie Experiments, Genie Model, and the Story-World Consistency Engine. Real projects, honestly labelled.",
-    modelDescription:
-      "Chat with Genie Model — an AI model by Genie, free to try with a daily limit.",
+      "Our ventures from Genie — Port Said Hub and the Story-World Consistency Engine. Real projects, honestly labelled.",
     aboutDescription:
       "Genie is an independent digital venture studio. Our vision, mission, and philosophy — and the five things we do.",
     contactDescription:
@@ -18,7 +16,6 @@ export const enMessages = {
   nav: {
     home: "Home",
     work: "Ventures",
-    model: "Model",
     about: "About",
     contact: "Contact",
     letsTalk: "Let’s Talk",
@@ -99,10 +96,6 @@ export const enMessages = {
     ],
     futureClosing:
       "We are here to keep building, exploring, and making ideas real.",
-    modelCtaHeading: "Meet Genie Model.",
-    modelCtaText:
-      "Our AI model — free to try, 10 messages a day.",
-    modelCtaButton: "Chat with Genie Model",
   },
   capabilities: [
     {
@@ -131,51 +124,6 @@ export const enMessages = {
     heading: "Ventures that exist.",
     intro:
       "Genie develops and explores digital ventures across different fields, each built around its own purpose, audience, and vision. Our ventures are not limited to one industry. Each project represents an opportunity to explore a problem, create a solution, and build something meaningful.",
-  },
-  model: {
-    title: "Genie Model",
-    eyebrow: "Genie Model",
-    heading: "Talk to Genie Model.",
-    powerHeading: "What it can do",
-    powerText:
-      "Genie Model answers questions, explains ideas and topics, helps you shape and explore an idea, and writes and brainstorms with you — a chat assistant in Arabic or English.",
-    audienceHeading: "Who it is for",
-    audienceText:
-      "For founders and small businesses exploring digital products, and for anyone curious about Genie and its ventures.",
-    cannot: "It can't browse the web, access your accounts, or place orders.",
-    limitNote: "Free — 10 messages per day.",
-    remaining: "{n} messages left today",
-    placeholder: "Ask Genie Model anything…",
-    send: "Send",
-    typing: "Genie Model is thinking…",
-    empty: "Start the conversation — ask about Genie, our ventures, or anything else.",
-    suggestions: [
-      "What is Genie?",
-      "Tell me about Port Said Hub",
-      "What can Genie Model do?",
-    ],
-    newChat: "New chat",
-    backToSite: "Back to site",
-    keyTitle: "Use your own OpenRouter key",
-    keyNote:
-      "No key is configured on the server yet, so add your own free OpenRouter key to chat. It stays in your browser (local storage) and is sent only to our own /api/chat, which forwards it to OpenRouter.",
-    keyLabel: "Your OpenRouter API key",
-    keyPlaceholder: "sk-or-v1-…",
-    keySave: "Save key",
-    keySaved: "Key saved in this browser.",
-    keyClear: "Remove key",
-    keyHas: "Your key is saved in this browser.",
-    errors: {
-      empty: "Please write a message first.",
-      noKey: "No key is configured. Add your own free OpenRouter key below to chat.",
-      invalidKey: "That OpenRouter key was rejected. Check the key and try again.",
-      rateLimited:
-        "You’ve reached the free limit of 10 messages for today. Come back tomorrow — or add your own key to keep going.",
-      busy: "The free models are busy right now. Please try again shortly.",
-      generic: "Something went wrong. Please try again.",
-    },
-    tryIt: "Try Genie Model",
-    tryText: "Chat with the model for free — 10 messages per day, no account needed.",
   },
   project: {
     back: "All work",
@@ -245,16 +193,6 @@ export const enMessages = {
     heading: "Let’s create something meaningful.",
     intro:
       "Tell us about the idea — what it is, who it’s for, and what “real” would look like. We read every message ourselves.",
-    askHeading: "Ask about Genie",
-    askIntro:
-      "Ask anything about Genie — the studio, our ventures, and our founder. This chat only answers questions about the company.",
-    askEmpty:
-      "Ask me anything about Genie — the studio, our ventures, or our founder.",
-    askSuggestions: [
-      "What is Genie?",
-      "What are Genie's ventures?",
-      "Who is the founder of Genie?",
-    ],
     directEmail: "Or email us directly:",
     setupNote:
       "Direct contact details are being set up — use the form for now. (Configured in src/config/site.ts.)",

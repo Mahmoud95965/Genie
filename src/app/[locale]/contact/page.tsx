@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import ContactForm from "@/components/ContactForm";
-import ModelChat from "@/components/ModelChat";
 import Reveal from "@/components/Reveal";
 import { siteConfig } from "@/config/site";
 import { getMessages, isLocale, type Locale } from "@/i18n/config";
@@ -55,33 +54,6 @@ export default function ContactPage({ params }: { params: { locale: string } }) 
           </Reveal>
         </div>
         <div className="md:col-span-7">
-          <Reveal delay={0.05}>
-            <section
-              className="mb-10 rounded-2xl border hairline bg-[#0A0A0F] p-6 md:p-7"
-              aria-labelledby="ask-heading"
-            >
-              <p className="text-xs uppercase tracking-[0.28em] text-sky">{t.contact.askHeading}</p>
-              <h2
-                id="ask-heading"
-                className="display mt-3 font-display text-2xl font-bold text-white md:text-3xl"
-              >
-                {t.contact.askHeading}
-              </h2>
-              <p className="mt-3 max-w-xl leading-relaxed text-zinc-400">
-                {t.contact.askIntro}
-              </p>
-              <div className="mt-6">
-                <ModelChat
-                  t={t.model}
-                  mode="company"
-                  compact
-                  greeting={t.contact.askEmpty}
-                  suggestions={t.contact.askSuggestions}
-                  locale={locale}
-                />
-              </div>
-            </section>
-          </Reveal>
           <Reveal delay={0.1}>
             <ContactForm t={t.contact.form} />
           </Reveal>

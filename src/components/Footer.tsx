@@ -15,8 +15,7 @@ export default function Footer({ locale, t }: { locale: Locale; t: Messages }) {
   ];
   const workLinks = [
     { label: "Port Said Hub", href: localizedPath(locale, "/work/port-said-hub") },
-    { label: "Qena Services Platform", href: localizedPath(locale, "/work/qena-services") },
-    { label: "Genie Experiments", href: localizedPath(locale, "/work/genie-experiments") },
+    { label: "Story-World Consistency Engine", href: localizedPath(locale, "/work/storyworld") },
   ];
 
   return (

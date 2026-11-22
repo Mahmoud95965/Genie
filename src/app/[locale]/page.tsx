@@ -176,28 +176,6 @@ export default function Home({ params }: { params: { locale: string } }) {
           </p>
         </Reveal>
 
-        {/* ——— GENIE MODEL CTA ——— */}
-        <Reveal className="mt-14 md:mt-20">
-          <div className="rounded-3xl bg-gradient-to-br from-sky/70 via-blue-500/40 to-violet-500/70 p-px">
-            <div className="panel flex flex-col items-start gap-6 rounded-3xl border-0 p-7 md:flex-row md:items-center md:justify-between md:p-10">
-              <div>
-                <h3 className="display font-display text-2xl font-bold text-white md:text-3xl">
-                  {t.home.modelCtaHeading}
-                </h3>
-                <p className="mt-3 max-w-xl leading-relaxed text-zinc-400">
-                  {t.home.modelCtaText}
-                </p>
-              </div>
-              <Link
-                href={localizedPath(locale, "/model")}
-                className="group inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-medium text-black transition-colors hover:bg-sky"
-              >
-                {t.home.modelCtaButton}
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1 rtl:-scale-x-100 rtl:group-hover:-translate-x-1" aria-hidden="true" />
-              </Link>
-            </div>
-          </div>
-        </Reveal>
       </section>
 
       {/* ——— 05 · HOW WE WORK ——— */}
