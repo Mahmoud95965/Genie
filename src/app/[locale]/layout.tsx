@@ -35,20 +35,20 @@ export async function generateMetadata({
   return {
     metadataBase: new URL(base),
     title: {
-      default: "Genie — Digital Product Studio | Make Ideas Real.",
+      default: "Genie — Digital Venture Studio | Make Ideas Real.",
       template: "%s — Genie",
     },
     description: t.meta.description,
-    keywords: ["Genie", "digital product studio", "web platforms", "UI/UX design", "AI-powered experiences", "Port Said Hub", "Qena Services"],
+    keywords: ["Genie", "digital venture studio", "web platforms", "UI/UX design", "AI-powered experiences", "Port Said Hub", "Qena Services"],
     authors: [{ name: "Genie" }],
     alternates: {
       canonical: `/${locale}`,
       languages: { en: "/en", ar: "/ar" },
     },
-    openGraph: openGraph(locale, "Genie — Digital Product Studio | Make Ideas Real.", t.meta.description),
+    openGraph: openGraph(locale, "Genie — Digital Venture Studio | Make Ideas Real.", t.meta.description),
     twitter: {
       card: "summary_large_image",
-      title: "Genie — Digital Product Studio | Make Ideas Real.",
+      title: "Genie — Digital Venture Studio | Make Ideas Real.",
       description: t.meta.description,
       images: ["/logo/genie-logo.jpg"],
     },

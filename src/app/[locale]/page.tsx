@@ -22,13 +22,13 @@ export async function generateMetadata({
   const locale: Locale = isLocale(params.locale) ? params.locale : "en";
   const t = getMessages(locale);
   return {
-    title: "Genie — Digital Product Studio | Make Ideas Real.",
+    title: "Genie — Digital Venture Studio | Make Ideas Real.",
     description: t.meta.description,
     alternates: {
       canonical: `/${locale}`,
       languages: { en: "/en", ar: "/ar" },
     },
-    openGraph: openGraph(locale, "Genie — Digital Product Studio | Make Ideas Real.", t.meta.description),
+    openGraph: openGraph(locale, "Genie — Digital Venture Studio | Make Ideas Real.", t.meta.description),
   };
 }
 
@@ -126,6 +126,7 @@ export default function Home({ params }: { params: { locale: string } }) {
             number="04"
             eyebrow={t.home.selectedEyebrow}
             title={t.home.selectedHeading}
+            intro={t.work.intro}
             id="work-heading"
           />
           <Link href={workHref} className="group inline-flex shrink-0 items-center gap-2 pb-1 text-sm font-medium text-white">
@@ -168,6 +169,12 @@ export default function Home({ params }: { params: { locale: string } }) {
             </Reveal>
           ))}
         </div>
+
+        <Reveal className="mt-14 md:mt-20">
+          <p className="max-w-2xl border-s-2 border-sky/60 ps-5 leading-relaxed text-zinc-400">
+            {t.home.futureVentures}
+          </p>
+        </Reveal>
       </section>
 
       {/* ——— 05 · HOW WE WORK ——— */}
@@ -242,8 +249,18 @@ export default function Home({ params }: { params: { locale: string } }) {
                   {t.footer.startProject}
                 </p>
                 <h2 id="cta-heading" className="display mx-auto mt-6 max-w-3xl font-display text-4xl font-bold text-white md:text-6xl">
-                  {t.home.closingHeading}
+                  {t.home.futureHeading}
                 </h2>
+                <div className="mx-auto mt-8 max-w-2xl space-y-3">
+                  {t.home.futureLines.map((line) => (
+                    <p key={line} className="display font-display text-xl font-bold leading-snug text-zinc-200 md:text-2xl">
+                      {line}
+                    </p>
+                  ))}
+                </div>
+                <p className="mx-auto mt-8 max-w-xl leading-relaxed text-zinc-400">
+                  {t.home.futureClosing}
+                </p>
                 <Link
                   href={contactHref}
                   className="group mt-10 inline-flex items-center gap-2 rounded-full bg-white px-8 py-4 text-base font-medium text-black transition-colors hover:bg-sky"

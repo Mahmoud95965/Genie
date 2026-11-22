@@ -5,115 +5,126 @@
 export const enMessages = {
   meta: {
     description:
-      "Genie is an independent digital technology company building products, platforms, and intelligent digital experiences. We turn ideas into meaningful solutions through technology, design, and innovation — creating products that solve real problems and open new possibilities.",
+      "Genie is an independent digital venture studio focused on imagining, building, and growing digital products, platforms, and ventures.",
     workDescription:
-      "Selected work from Genie — Port Said Hub, Qena Services Platform, and Genie Experiments. Real projects, honestly labelled.",
+      "Our ventures from Genie — Port Said Hub, Qena Services Platform, and Genie Experiments. Real projects, honestly labelled.",
     aboutDescription:
-      "Genie is an independent digital technology company. Our vision, mission, and philosophy — and the five things we do.",
+      "Genie is an independent digital venture studio. Our vision, mission, and philosophy — and the five things we do.",
     contactDescription:
       "Let's create something meaningful. Tell Genie about your idea — project type, description and budget.",
   },
   nav: {
     home: "Home",
-    work: "Work",
+    work: "Ventures",
     about: "About",
     contact: "Contact",
     letsTalk: "Let’s Talk",
     skip: "Skip to content",
     openMenu: "Open menu",
     closeMenu: "Close menu",
-    studio: "Digital Product Studio",
+    studio: "Digital Venture Studio",
     tagline: "Make Ideas Real.",
-    studioNote: "A new independent digital product studio.",
+    studioNote: "A new independent digital venture studio.",
     switchToArabic: "عربي",
     switchToEnglish: "EN",
     switchLabel: "Switch language",
   },
   hero: {
-    eyebrow: "Genie — Digital Product Studio",
+    eyebrow: "Genie — Digital Venture Studio",
     titleA: "Ideas deserve",
     titleB: "to become real.",
     supporting:
-      "Genie is an independent digital technology company building products, platforms, and intelligent digital experiences. We turn ideas into meaningful solutions through technology, design, and innovation — creating products that solve real problems and open new possibilities.",
-    explore: "Explore our work",
+      "Genie is an independent digital venture studio focused on imagining, building, and growing digital products, platforms, and ventures.",
+    explore: "Explore our ventures",
     build: "Let’s build something",
     canvasLabel: "Digital energy — move your cursor",
-    scroll: "Scroll — selected work below",
+    scroll: "Scroll — our ventures below",
   },
   home: {
     marquee: [
       "Make Ideas Real.",
-      "Digital Products",
+      "Digital Ventures",
       "Digital Platforms",
-      "Technology & AI",
-      "Digital Experiences",
-      "Innovation",
+      "Product Development",
+      "Technology & Innovation",
+      "Digital Ecosystems",
     ],
     whoEyebrow: "Who we are",
-    whoHeading: "An independent technology company.",
+    whoHeading: "An independent digital venture studio.",
     whoText1:
-      "We don't limit ourselves to building websites or developing software. We invent digital products, create platforms that connect services, people, and opportunities, and use technology and AI to deliver experiences that are more effective and easier to use.",
+      "Genie is an independent digital venture studio focused on imagining, building, and growing digital products, platforms, and ventures. We explore opportunities, identify real-world needs, and turn ideas into digital projects that connect people, services, and possibilities. From local digital ecosystems to new product concepts, we build ventures with purpose, combining technology, creativity, and a long-term vision.",
     whoText2:
-      "Genie is new and independent — small by choice, and focused on work that has a reason to exist. We judge everything we build by whether it solves a real problem.",
-    selectedEyebrow: "Selected work",
-    selectedHeading: "Things we’re building.",
-    allWork: "All work",
+      "Genie is not defined by a single product or industry. It is driven by the ambition to create meaningful digital experiences and build projects that can evolve, grow, and make a difference. We believe the future belongs not only to those who imagine what is possible, but to those who make it real.",
+    selectedEyebrow: "Our Ventures",
+    selectedHeading: "Ventures we’re building.",
+    allWork: "All ventures",
     viewProject: "View project",
     viewCaseStudy: "view case study",
     whatEyebrow: "What we do",
     whatHeading: "Five things we do.",
     whatIntro:
-      "Five pillars, one purpose — turning ideas into products, platforms, and experiences that work.",
+      "Five pillars, one purpose — imagining, building, and growing digital ventures.",
     visionEyebrow: "Vision & mission",
     visionHeading: "Our vision",
     visionText:
-      "To help build a smarter, more connected digital future — through technology products and solutions that make ideas truly valuable.",
+      "To build an evolving portfolio of digital ventures that create value, open new possibilities, and contribute to a more connected and digitally empowered world.",
     missionHeading: "Our mission",
     missionText:
-      "Turning ideas into useful digital products that combine creativity, technology, and design — solving real problems.",
-    approachEyebrow: "Our approach",
+      "To transform promising ideas and real-world opportunities into meaningful digital ventures through thoughtful innovation, technology, and continuous development.",
+    approachEyebrow: "How we build",
     approachHeading: "From idea to something real.",
     approach: [
-      { title: "Discover", text: "Understand the problem, context, and opportunity." },
-      { title: "Define", text: "Shape the idea into a clear product direction." },
-      { title: "Build", text: "Design, develop, test, and bring the product to life." },
-      { title: "Evolve", text: "Improve, expand, and adapt as the product grows." },
+      { title: "Discover", text: "Explore opportunities, understand real needs, and identify problems worth solving." },
+      { title: "Imagine", text: "Develop ideas, define the vision, and shape a clear direction." },
+      { title: "Build", text: "Turn concepts into working digital products, platforms, and experiences." },
+      { title: "Evolve", text: "Learn, improve, expand, and allow each venture to grow beyond its beginning." },
     ],
     philosophyEyebrow: "Our philosophy",
-    philosophyQuoteA: "Technology is not an end in itself.",
-    philosophyQuoteB: "A product's value is in the problems it solves.",
+    philosophyQuoteA: "We believe ideas alone are not enough.",
+    philosophyQuoteB: "We build because something can be better.",
     philosophyText:
-      "A product's value is not in how complex it is, but in its ability to solve a problem, make people's lives easier, and create new opportunities. That is the test every Genie product has to pass.",
+      "Real value comes from understanding the problem, making thoughtful decisions, building with purpose, and continuously improving what we create. We believe technology should be useful, products should have a reason to exist, and innovation should be measured by the possibilities it creates and the problems it solves. We don't build simply to add something new to the digital world.",
     closingHeading: "Have an idea? Let’s make it real.",
     closingButton: "Start a conversation",
+    futureVentures:
+      "Future Ventures — New products, platforms, and ideas currently being explored, developed, or prepared for launch.",
+    futureVenturesHeading: "Future Ventures",
+    futureHeading: "The Future",
+    futureLines: [
+      "What begins as an idea can become a product.",
+      "What begins as a product can become a platform.",
+      "What begins as a platform can create an entirely new opportunity.",
+    ],
+    futureClosing:
+      "We are here to keep building, exploring, and making ideas real.",
   },
   capabilities: [
     {
-      title: "Digital Products",
-      text: "Designing and building digital products from idea to launch.",
+      title: "Digital Ventures",
+      text: "We identify opportunities, develop ideas, and build independent digital projects with the potential to grow into meaningful ventures.",
     },
     {
       title: "Digital Platforms",
-      text: "Platforms that connect users with services and opportunities.",
+      text: "We create platforms that connect people, services, communities, and opportunities through purposeful digital experiences.",
     },
     {
-      title: "Technology & AI",
-      text: "Applying technology and AI to practical, real-world solutions.",
+      title: "Product Development",
+      text: "We transform concepts into real products, from early exploration and design to development, launch, and continuous evolution.",
     },
     {
-      title: "Digital Experiences",
-      text: "Crafting digital experiences that are simple, modern, and different.",
+      title: "Technology & Innovation",
+      text: "We explore emerging technologies and new approaches to solve problems, unlock possibilities, and build better digital experiences.",
     },
     {
-      title: "Innovation",
-      text: "Exploring new ideas and turning them into projects that can grow and scale.",
+      title: "Digital Ecosystems",
+      text: "We build interconnected digital experiences that bring services, information, and communities together within unified platforms.",
     },
   ],
   work: {
-    eyebrow: "Work",
-    heading: "Work that exists.",
+    eyebrow: "Our Ventures",
+    heading: "Ventures that exist.",
     intro:
-      "Every project here is real. Live work is labelled live; unfinished work is labelled exactly what it is — in development, or an experiment.",
+      "Genie develops and explores digital ventures across different fields, each built around its own purpose, audience, and vision. Our ventures are not limited to one industry. Each project represents an opportunity to explore a problem, create a solution, and build something meaningful.",
   },
   project: {
     back: "All work",
@@ -137,23 +148,23 @@ export const enMessages = {
   },
   about: {
     eyebrow: "About",
-    heading: "An independent technology company, built to make ideas real.",
+    heading: "An independent digital venture studio, built to make ideas real.",
     intro:
-      "Genie is an independent digital technology company building products, platforms, and intelligent digital experiences. We turn ideas into meaningful solutions through technology, design, and innovation — creating products that solve real problems and open new possibilities.",
+      "Genie is an independent digital venture studio focused on imagining, building, and growing digital products, platforms, and ventures. We explore opportunities, identify real-world needs, and turn ideas into digital projects that connect people, services, and possibilities. From local digital ecosystems to new product concepts, we build ventures with purpose, combining technology, creativity, and a long-term vision. Genie is not defined by a single product or industry. It is driven by the ambition to create meaningful digital experiences and build projects that can evolve, grow, and make a difference. We believe the future belongs not only to those who imagine what is possible, but to those who make it real.",
     visionHeading: "Our vision",
     visionText:
-      "To help build a smarter, more connected digital future — through technology products and solutions that make ideas truly valuable.",
+      "To build an evolving portfolio of digital ventures that create value, open new possibilities, and contribute to a more connected and digitally empowered world.",
     missionHeading: "Our mission",
     missionText:
-      "Turning ideas into useful digital products that combine creativity, technology, and design — solving real problems.",
+      "To transform promising ideas and real-world opportunities into meaningful digital ventures through thoughtful innovation, technology, and continuous development.",
     philosophyHeading: "Our philosophy",
     philosophyQuote:
-      "Technology is not an end in itself. A product's value is not in how complex it is, but in its ability to solve a problem, make people's lives easier, and create new opportunities.",
+      "We believe ideas alone are not enough. Real value comes from understanding the problem, making thoughtful decisions, building with purpose, and continuously improving what we create.",
     philosophyText:
-      "We build things that have a reason to exist — and we are comfortable leaving the rest unbuilt. Restraint is part of the craft: fewer features, done properly, beat a long list of half-finished ones.",
-    howHeading: "How we work",
+      "We believe technology should be useful, products should have a reason to exist, and innovation should be measured by the possibilities it creates and the problems it solves. We don't build simply to add something new to the digital world. We build because something can be better.",
+    howHeading: "How we build",
     howIntro:
-      "The same approach behind every project — discover, define, build, evolve — applied as a working habit, not a slide.",
+      "The same approach behind every project — discover, imagine, build, evolve — applied as a working habit, not a slide.",
     howItems: [
       {
         title: "Start with the problem",
@@ -172,11 +183,11 @@ export const enMessages = {
         text: "Launch is a beginning. Products grow, break, and change — and we stay to improve them as they do.",
       },
     ],
-    ambitionsHeading: "Our ambitions",
-    ambitionsP1:
-      "To build products that outlast their launch. To keep learning in public through experiments. And to grow, project by project, into a studio whose name means something simple: if Genie built it, it works, and it matters.",
-    ambitionsP2:
-      "We are at the beginning. That is not a disclaimer — it is the honest starting point, and the work on this site is the evidence so far.",
+    founderHeading: "The Founder",
+    founderName: "Mahmoud",
+    founderRole: "Founder of Genie | Digital Venture Builder",
+    founderText:
+      "Genie was founded by Mahmoud, an independent digital builder driven by a passion for technology, product creation, and transforming ideas into real-world digital projects. His focus is on exploring opportunities, building digital platforms, experimenting with emerging technologies, and creating ventures that can grow into meaningful products. Genie represents a long-term vision of building, learning, and creating — one venture at a time.",
   },
   contact: {
     eyebrow: "Contact",
@@ -225,13 +236,13 @@ export const enMessages = {
     },
   },
   footer: {
-    tagline: "We turn ideas into digital experiences.",
+    tagline: "We turn ideas into digital ventures.",
     makeReal: "Make Ideas Real.",
     site: "Site",
-    work: "Work",
-    startProject: "Start a project",
+    work: "Ventures",
+    startProject: "Start a venture",
     buildSomething: "Let’s build something",
-    rights: "Genie — Digital Product Studio.",
+    rights: "Genie — Digital Venture Studio.",
     newIdentity: "Genie is a new independent identity.",
   },
   notFound: {

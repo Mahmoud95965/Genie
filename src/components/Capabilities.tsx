@@ -2,10 +2,10 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  Lightbulb,
-  MousePointerClick,
+  Layers,
   Network,
   Package,
+  Rocket,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
@@ -18,11 +18,11 @@ import type { Messages } from "@/i18n/messages/en";
  * by pillar order; titles and text come from the dictionaries.
  */
 const ICONS: LucideIcon[] = [
-  Package, // Digital Products
+  Rocket, // Digital Ventures
   Network, // Digital Platforms
-  Sparkles, // Technology & AI
-  MousePointerClick, // Digital Experiences
-  Lightbulb, // Innovation
+  Package, // Product Development
+  Sparkles, // Technology & Innovation
+  Layers, // Digital Ecosystems
 ];
 
 export default function Capabilities({ items }: { items: Messages["capabilities"] }) {

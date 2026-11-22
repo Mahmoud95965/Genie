@@ -136,17 +136,57 @@ export default function AboutPage({ params }: { params: { locale: string } }) {
         </ol>
       </section>
 
-      {/* Ambitions */}
-      <section className="mt-20 border-t hairline pt-14 md:mt-28" aria-labelledby="ambitions-heading">
+      {/* 06 · Future Ventures */}
+      <section className="mt-20 border-t hairline pt-14 md:mt-28" aria-labelledby="future-ventures-heading">
+        <SectionHeading
+          number="06"
+          eyebrow={t.home.futureVenturesHeading}
+          id="future-ventures-heading"
+        />
+        <Reveal>
+          <p className="mt-10 max-w-2xl border-s-2 border-sky/60 ps-5 text-lg leading-relaxed text-zinc-300">
+            {t.home.futureVentures}
+          </p>
+        </Reveal>
+      </section>
+
+      {/* 07 · The Founder */}
+      <section className="mt-20 border-t hairline pt-14 md:mt-28" aria-labelledby="founder-heading">
+        <div className="grid gap-8 md:grid-cols-12">
+          <div className="md:col-span-4">
+            <div className="md:sticky md:top-28">
+              <SectionHeading number="07" eyebrow={t.about.founderHeading} />
+            </div>
+          </div>
+          <div className="md:col-span-8">
+            <Reveal>
+              <h2 id="founder-heading" className="display font-display text-4xl font-bold text-white md:text-5xl">
+                {t.about.founderName}
+              </h2>
+              <p className="mt-3 font-mono text-xs text-sky">{t.about.founderRole}</p>
+              <p className="mt-6 max-w-2xl leading-relaxed text-zinc-400">
+                {t.about.founderText}
+              </p>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
+      {/* The Future */}
+      <section className="mt-20 border-t hairline pt-14 md:mt-28" aria-labelledby="future-heading">
         <Reveal>
           <div className="grid gap-8 md:grid-cols-12">
-            <h2 id="ambitions-heading" className="display font-display text-3xl font-bold text-white md:col-span-4 md:text-4xl">{t.about.ambitionsHeading}</h2>
+            <h2 id="future-heading" className="display font-display text-3xl font-bold text-white md:col-span-4 md:text-4xl">{t.home.futureHeading}</h2>
             <div className="md:col-span-8">
-              <p className="text-lg leading-relaxed text-zinc-300">
-                {t.about.ambitionsP1}
-              </p>
-              <p className="mt-5 leading-relaxed text-zinc-400">
-                {t.about.ambitionsP2}
+              <div className="space-y-3">
+                {t.home.futureLines.map((line) => (
+                  <p key={line} className="display font-display text-xl font-bold leading-snug text-zinc-200 md:text-2xl">
+                    {line}
+                  </p>
+                ))}
+              </div>
+              <p className="mt-6 leading-relaxed text-zinc-400">
+                {t.home.futureClosing}
               </p>
               <Link
                 href={contactHref}
