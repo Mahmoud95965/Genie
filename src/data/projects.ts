@@ -134,31 +134,31 @@ export const projects: Project[] = [
     slug: "genie-model",
     name: "Genie Model",
     short:
-      "An AI model by Genie, free to try with limits, powered by OpenRouter free models. Any app can connect to it through the OpenRouter API.",
+      "An AI model by Genie, free to try with a daily limit. Ask it about Genie, our ventures, or anything else.",
     category: "AI Model",
     status: "Live",
     accent: "violet",
-    stack: ["OpenRouter", "Next.js"],
+    stack: ["Next.js", "AI"],
     links: [],
     challenge:
-      "Good AI assistance was often expensive, locked behind accounts, or hard to reach from the apps people already use. Genie wanted a model anyone could try for free — and any app could connect to — without building new infrastructure.",
+      "Good AI assistance was often expensive or locked behind accounts. Genie wanted a model anyone could try for free — no account, no setup, just ask.",
     concept:
-      "Genie Model is an AI model by Genie, served through OpenRouter's free models. Visitors chat with it for free, with a daily limit, and any app can call the same model through the OpenRouter API.",
+      "Genie Model is an AI model by Genie that anyone can chat with for free, with a daily limit. It answers questions, explains ideas, and helps people explore what Genie does — in Arabic or English.",
     design:
-      "A simple chat page in the Genie design system — dark, calm, bilingual. No account needed. A visitor's own key, if they add one, stays in their browser and is sent only to our own API route.",
+      "A simple chat page in the Genie design system — dark, calm, bilingual. No account needed.",
     development:
-      "A Next.js API route calls OpenRouter's chat completions endpoint, trying free models in order when one is busy, with a per-IP daily limit for the shared key and a bring-your-own-key option when no server key is configured.",
+      "A chat page on the Genie website, with a free daily limit and a bring-your-own-key option. Built to be simple: no account, no setup — just ask.",
     shortAr:
-      "نموذج ذكاء اصطناعي من Genie، جرّبه مجاناً بحد يومي، مدعوم بموديلات OpenRouter المجانية. أي تطبيق يمكنه الاتصال به عبر واجهة OpenRouter البرمجية.",
+      "نموذج ذكاء اصطناعي من Genie، جرّبه مجاناً بحد يومي. اسأله عن Genie أو مشاريعنا أو أي شيء آخر.",
     categoryAr: "نموذج ذكاء اصطناعي",
     challengeAr:
-      "كانت المساعدة الذكية الجيدة غالباً مكلفة، أو مقفلة خلف حسابات، أو يصعب الوصول إليها من التطبيقات التي يستخدمها الناس. أرادت Genie نموذجاً يمكن لأي شخص تجربته مجاناً — ويمكن لأي تطبيق الاتصال به — دون بناء بنية تحتية جديدة.",
+      "كانت المساعدة الذكية الجيدة غالباً مكلفة أو مقفلة خلف حسابات. أرادت Genie نموذجاً يمكن لأي شخص تجربته مجاناً — لا حساب ولا إعداد، فقط اسأل.",
     conceptAr:
-      "نموذج Genie هو نموذج ذكاء اصطناعي من Genie، يُقدَّم عبر موديلات OpenRouter المجانية. يتحدث الزوار معه مجاناً بحد يومي، ويمكن لأي تطبيق استدعاء النموذج نفسه عبر واجهة OpenRouter البرمجية.",
+      "نموذج Genie هو نموذج ذكاء اصطناعي من Genie يمكن لأي شخص التحدث معه مجاناً بحد يومي. يجيب عن الأسئلة، ويشرح الأفكار، ويساعد الناس على استكشاف ما تفعله Genie — بالعربية أو بالإنجليزية.",
     designAr:
-      "صفحة دردشة بسيطة بنظام تصميم Genie — داكنة وهادئة وثنائية اللغة. لا حاجة لحساب. مفتاح الزائر الخاص، إن أضاف واحداً، يبقى في متصفحه ويُرسل فقط إلى مسار API الخاص بنا.",
+      "صفحة دردشة بسيطة بنظام تصميم Genie — داكنة وهادئة وثنائية اللغة. لا حاجة لحساب.",
     developmentAr:
-      "مسار API في Next.js يستدعي نقطة إكمال الدردشة في OpenRouter، ويجرّب الموديلات المجانية بالترتيب عندما يكون أحدها مشغولاً، مع حد يومي لكل عنوان IP للمفتاح المشترك، وخيار استخدام مفتاحك الخاص عندما لا يكون هناك مفتاح خادم مضبوط.",
+      "صفحة دردشة على موقع Genie، بحد يومي مجاني وخيار استخدام مفتاحك الخاص. بُنيت لتكون بسيطة: لا حساب ولا إعداد — فقط اسأل.",
   },
 ];
 

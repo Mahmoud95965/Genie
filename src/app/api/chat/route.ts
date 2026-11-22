@@ -9,6 +9,10 @@ export const runtime = "nodejs";
  * models. Free models are rate-limited by OpenRouter and their upstream
  * providers, so a 429/5xx on one model falls through to the next.
  *
+ * Two modes: "general" (the standalone /model chat) and "company" (the
+ * contact-page chat, which answers only about the Genie company, using a
+ * server-side system prompt grounded in real company facts).
+ *
  * Key: the server key (OPENROUTER_API_KEY env var) when set, otherwise the
  * visitor's own free OpenRouter key sent as `userKey`. The key is never
  * logged, and message content is never logged.
@@ -27,6 +31,26 @@ const MODELS = [
 
 const SYSTEM_PROMPT =
   "You are Genie, a helpful AI assistant built by Genie, an independent digital venture studio. Answer in the user's language. Be concise and honest; if you don't know something, say so.";
+
+/**
+ * Company mode — the assistant on the contact page. It answers ONLY about
+ * Genie itself, from the facts below. No prices are published anywhere on
+ * the site, so never state a price. No email is published, so never invent
+ * one — contact happens through the form on the contact page. Anything
+ * outside Genie gets a polite refusal pointing to the general Genie Model
+ * chat or the contact form.
+ */
+const COMPANY_SYSTEM_PROMPT = `You are Genie, the assistant on Genie's contact page. Answer ONLY questions about the Genie company, using only these facts:
+
+- Genie is an independent digital venture studio. Its tagline is "Make Ideas Real."
+- What Genie does (5 pillars): Digital Ventures — identifying opportunities and building independent digital projects; Digital Platforms — platforms that connect people, services, communities and opportunities; Product Development — turning concepts into real products, from exploration to launch and evolution; Technology & Innovation — exploring emerging technologies to solve problems; Digital Ecosystems — interconnected digital experiences that bring services, information and communities together.
+- Genie is building 4 ventures: Port Said Hub (live) — a digital ecosystem bringing Port Said's services, places, experiences and opportunities closer to people through a unified platform; Qena Services Platform (in development) — a digital platform organizing and connecting local services across Qena; Genie Experiments (concept) — experimental tools and digital experiences; Genie Model (live) — an AI model by Genie, free to try with a daily limit of 10 messages.
+- Founder: Mahmoud, Founder of Genie and Digital Venture Builder. Genie was founded by Mahmoud, an independent digital builder focused on exploring opportunities, building digital platforms, and creating ventures that can grow into meaningful products.
+- Philosophy: ideas alone are not enough — real value comes from understanding the problem, building with purpose, and continuously improving. Technology should be useful and products should have a reason to exist.
+- How Genie builds: Discover, Imagine, Build, Evolve.
+- To start a project with Genie, use the contact form on this page. No email address is published.
+
+Rules: answer in the user's language. If a question is about anything other than Genie, politely say you can only help with questions about Genie, and suggest the general Genie Model chat or the contact form. Never invent prices, contact details, clients, or statistics.`;
 
 const MAX_MESSAGES = 20;
 const MAX_CHARS = 4000;
@@ -60,10 +84,19 @@ export async function POST(req: NextRequest) {
     return jsonError(400, "bad_request", "Request body must be an object.");
   }
 
-  const { messages, userKey } = body as {
+  const { messages, userKey, mode } = body as {
     messages?: unknown;
     userKey?: unknown;
+    mode?: unknown;
   };
+
+  // Mode: "general" (the /model chat) or "company" (the contact-page
+  // chat, restricted to Genie company information). Defaults to general.
+  const chatMode: "general" | "company" =
+    mode === "company" ? "company" : "general";
+  if (mode !== undefined && mode !== "general" && mode !== "company") {
+    return jsonError(400, "bad_request", 'mode must be "general" or "company".');
+  }
 
   // Validate messages: array of 1..20, user/assistant roles only,
   // each 1..4000 chars. System messages from the client are dropped —
@@ -133,7 +166,10 @@ export async function POST(req: NextRequest) {
   }
 
   const payloadMessages = [
-    { role: "system", content: SYSTEM_PROMPT },
+    {
+      role: "system",
+      content: chatMode === "company" ? COMPANY_SYSTEM_PROMPT : SYSTEM_PROMPT,
+    },
     ...cleaned,
   ];
 
