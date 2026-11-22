@@ -367,7 +367,7 @@ export default function ModelChat({
   const composer = (
     <form onSubmit={onSubmit} className={compact ? "border-t hairline p-4 md:p-5" : "shrink-0 px-4 pb-5 pt-3 md:px-6 md:pb-6"}>
       <div className="mx-auto w-full max-w-3xl">
-        <div className="flex items-end gap-3">
+        <div className="flex items-end gap-2 rounded-3xl border hairline bg-[#050507] p-2 transition-colors focus-within:border-sky/70">
           <label htmlFor="genie-model-input" className="sr-only">
             {t.placeholder}
           </label>
@@ -379,13 +379,13 @@ export default function ModelChat({
             onKeyDown={onKeyDown}
             placeholder={t.placeholder}
             disabled={loading}
-            className="max-h-40 min-h-[48px] w-full flex-1 resize-none rounded-xl border hairline bg-[#050507] px-4 py-3 text-[15px] text-white placeholder:text-zinc-600 transition-colors focus:border-sky/70 focus:outline-none disabled:opacity-60"
+            className="max-h-40 min-h-[40px] w-full flex-1 resize-none bg-transparent px-2 py-2 text-[15px] text-white placeholder:text-zinc-600 focus:outline-none disabled:opacity-60"
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
             aria-label={t.send}
-            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-black transition-colors hover:bg-sky disabled:opacity-40"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black transition-colors hover:bg-sky disabled:opacity-40"
           >
             {loading ? (
               <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
