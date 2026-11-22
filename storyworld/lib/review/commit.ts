@@ -16,15 +16,20 @@
  *   table); the characters named by a transfer are still created.
  * - `knowledge` -> knowledge rows.
  * - `character_facts` -> character-fact rows.
- * - `promises` -> promise rows, but ONLY for `status_change === "raised"`.
- *
- * OPEN QUESTION (spec ambiguity, not silently decided): the extractor
- * schema allows `status_change` of `fulfilled` / `violated` /
- * `abandoned`, but the spec never defines how such an item maps to
- * `promise_entries` vs `promise_resolutions` — the output carries no
- * promise identity to resolve against. M1 rejects non-`raised` promise
- * items at commit time with a per-item validation error instead of
- * guessing. See the M1 report / docs.
+ * - `promises` -> promise rows for `status_change === "raised"`;
+ *   for `fulfilled` / `violated` / `abandoned`, a `promise_resolutions`
+ *   row (M1.1 item 2): the reviewer must have chosen the target
+ *   promise on the review item (`targetPromiseId`); the resolved-at
+ *   event must resolve; a resolution without one is rejected. The
+ *   target must already exist in the branch's projection — a promise
+ *   raised in the same batch cannot be resolved by the same batch
+ *   (commit the raise first, then resolve in a later batch). Known
+ *   limitation, recorded in docs.
+ * - `knowledge_denials` -> `knowledge_denial` rows (M1.1 item 3):
+ *   explicit evidenced records of non-knowledge, added by the reviewer
+ *   (not by the extractor). The proposition and stated-at event
+ *   resolve through the maps above; at least one evidence span is
+ *   required (enforced by the store).
  */
 import { randomUUID } from "node:crypto";
 
@@ -72,6 +77,8 @@ export interface CommitBatchResult {
     characterFacts: string[];
     promises: string[];
     knowledgeUses: string[];
+    resolutions: string[];
+    knowledgeDenials: string[];
   };
   rejected: Array<{ itemId: string; reason: string }>;
 }
@@ -142,6 +149,8 @@ export function commitBatch(
     knowledgeUses: [],
     characterFacts: [],
     promises: [],
+    resolutions: [],
+    knowledgeDenials: [],
   };
   // Earlier batches' local ids (fixture-wide ids); batch-local entries
   // below override them.
@@ -154,6 +163,8 @@ export function commitBatch(
     characterFacts: [] as string[],
     promises: [] as string[],
     knowledgeUses: [] as string[],
+    resolutions: [] as string[],
+    knowledgeDenials: [] as string[],
   };
 
   // Character names referenced by accepted items (created on first use).
@@ -180,6 +191,10 @@ export function commitBatch(
       }
     }
     if (item.section === "knowledge" || item.section === "character_facts") {
+      const name = asString(data.character);
+      if (name) characterNames.add(name);
+    }
+    if (item.section === "knowledge_denials") {
       const name = asString(data.character);
       if (name) characterNames.add(name);
     }
@@ -340,44 +355,108 @@ export function commitBatch(
     committed.characterFacts.push(items.characterFacts[items.characterFacts.length - 1].id);
   }
 
-  // 6. Promises — only `raised` is defined by the spec (see header).
+  // 6. Promises — `raised` creates a promise row; a resolution
+  // status_change (M1.1 item 2) creates a `promise_resolutions` row
+  // against the reviewer-chosen target. The evidence span is the
+  // candidate's verified quote (kept on the review item for audit;
+  // the resolution row itself carries promise_id, resolved_at_event_id
+  // and status, per the spec table).
+  const existingPromiseIds = new Set(repo.snapshot(options.branchId).promises.map((p) => p.id));
   for (const item of accepted.filter((i) => i.section === "promises")) {
     const data = item.data;
     const statusChange = asString(data.status_change);
-    if (statusChange !== "raised") {
+    if (statusChange === "raised") {
+      const raisedLocalId = asString(data.raised_at_event_local_id);
+      const raisedId = raisedLocalId ? eventMap.get(raisedLocalId) : undefined;
+      if (!raisedLocalId || !raisedId) {
+        fail(item.id, `references unknown raised-at event ${JSON.stringify(raisedLocalId)}`);
+        continue;
+      }
+      const deadlineLocalId = asString(data.deadline_event_local_id);
+      const deadlineId = deadlineLocalId ? eventMap.get(deadlineLocalId) : undefined;
+      if (deadlineLocalId && !deadlineId) {
+        fail(item.id, `references unknown deadline event ${JSON.stringify(deadlineLocalId)}`);
+        continue;
+      }
+      const description = asString(data.description);
+      if (!description) {
+        fail(item.id, "description must be a non-empty string");
+        continue;
+      }
+      items.promises.push({
+        id: randomUUID(),
+        description,
+        raisedAtEventId: raisedId,
+        deadlineEventId: deadlineId ?? null,
+        deadlineCondition: asStringOrNull(data.deadline_condition),
+        evidence: buildVerifiedSpans(batch, item),
+      });
+      committed.promises.push(items.promises[items.promises.length - 1].id);
+      continue;
+    }
+    if (statusChange !== "fulfilled" && statusChange !== "violated" && statusChange !== "abandoned") {
+      fail(item.id, `unknown promise status_change ${JSON.stringify(statusChange)}`);
+      continue;
+    }
+    // Resolution: the reviewer must have chosen a target promise, and
+    // the resolved-at event must be given and resolvable.
+    if (item.targetPromiseId === null) {
       fail(
         item.id,
-        `promise status_change ${JSON.stringify(statusChange)} has no defined mapping to ` +
-          `promise_entries/promise_resolutions in the spec; only "raised" is supported in M1`,
+        `resolution candidate has no target promise; the reviewer must select one before accepting`,
       );
       continue;
     }
-    const raisedLocalId = asString(data.raised_at_event_local_id);
-    const raisedId = raisedLocalId ? eventMap.get(raisedLocalId) : undefined;
-    if (!raisedLocalId || !raisedId) {
-      fail(item.id, `references unknown raised-at event ${JSON.stringify(raisedLocalId)}`);
+    if (!existingPromiseIds.has(item.targetPromiseId)) {
+      fail(item.id, `target promise ${item.targetPromiseId} does not exist in this branch`);
       continue;
     }
-    const deadlineLocalId = asString(data.deadline_event_local_id);
-    const deadlineId = deadlineLocalId ? eventMap.get(deadlineLocalId) : undefined;
-    if (deadlineLocalId && !deadlineId) {
-      fail(item.id, `references unknown deadline event ${JSON.stringify(deadlineLocalId)}`);
+    const resolvedLocalId = asString(data.resolved_at_event_local_id);
+    if (!resolvedLocalId) {
+      fail(item.id, `resolution has no resolved_at_event_local_id`);
       continue;
     }
-    const description = asString(data.description);
-    if (!description) {
-      fail(item.id, "description must be a non-empty string");
+    const resolvedId = eventMap.get(resolvedLocalId);
+    if (!resolvedId) {
+      fail(item.id, `references unknown resolved-at event ${JSON.stringify(resolvedLocalId)}`);
       continue;
     }
-    items.promises.push({
+    items.resolutions.push({
       id: randomUUID(),
-      description,
-      raisedAtEventId: raisedId,
-      deadlineEventId: deadlineId ?? null,
-      deadlineCondition: asStringOrNull(data.deadline_condition),
+      promiseId: item.targetPromiseId,
+      resolvedAtEventId: resolvedId,
+      status: statusChange,
+    });
+    committed.resolutions.push(items.resolutions[items.resolutions.length - 1].id);
+  }
+
+  // 7. Knowledge denials (M1.1 item 3): explicit evidenced records of
+  // non-knowledge. Proposition and stated-at event resolve through the
+  // maps built above (same batch or earlier).
+  for (const item of accepted.filter((i) => i.section === "knowledge_denials")) {
+    const data = item.data;
+    const denialCharacterId = characterId(item, data.character);
+    if (!denialCharacterId) continue;
+    const propositionLocalId = asString(data.proposition_local_id);
+    const propositionId = propositionLocalId ? propMap.get(propositionLocalId) : undefined;
+    if (!propositionLocalId || !propositionId) {
+      fail(item.id, `references unknown proposition ${JSON.stringify(propositionLocalId)}`);
+      continue;
+    }
+    const statedLocalId = asString(data.stated_at_event_local_id);
+    const statedId = statedLocalId ? eventMap.get(statedLocalId) : undefined;
+    if (!statedLocalId || !statedId) {
+      fail(item.id, `references unknown stated-at event ${JSON.stringify(statedLocalId)}`);
+      continue;
+    }
+    items.knowledgeDenials.push({
+      id: randomUUID(),
+      characterId: denialCharacterId,
+      propositionId,
+      statedAtEventId: statedId,
       evidence: buildVerifiedSpans(batch, item),
     });
-    committed.promises.push(items.promises[items.promises.length - 1].id);
+    committed.knowledgeDenials.push(items.knowledgeDenials[items.knowledgeDenials.length - 1].id);
   }
 
   if (issues.length > 0) throw new ValidationFailedError(issues);

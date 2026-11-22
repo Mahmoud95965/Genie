@@ -14,6 +14,7 @@ import type {
   Commit,
   EventEntry,
   EventParticipant,
+  KnowledgeDenial,
   KnowledgeEntry,
   KnowledgeUse,
   PromiseEntry,
@@ -41,6 +42,8 @@ export interface ProjectedState {
   knowledge: KnowledgeEntry[];
   /** Knowledge uses whose event is current. */
   knowledgeUses: KnowledgeUse[];
+  /** Current explicit records of non-knowledge (M1.1 item 3). */
+  knowledgeDenials: KnowledgeDenial[];
   /** Current character facts. */
   characterFacts: CharacterFactEntry[];
   /** Current promises with their computed status. */
@@ -74,16 +77,21 @@ export function projectState(snapshot: LedgerSnapshot): ProjectedState {
   const promises: ProjectedPromise[] = snapshot.promises
     .filter((p) => !isRetracted("promise", p.id))
     .map((p) => {
+      // M1.1 item 2: retracted resolutions do not count (retracting a
+      // resolution returns the status to the previous one, or `open`).
+      // Latest resolution wins by `commit_seq`; two resolutions in the
+      // same commit resolve by insertion order (later inserted wins).
       const resolutions = snapshot.promiseResolutions
-        .filter((r) => r.promiseId === p.id)
+        .filter((r) => r.promiseId === p.id && !isRetracted("promise_resolution", r.id))
+        .map((r, index) => ({ r, index }))
         .sort((a, b) => {
-          const seqA = seqByCommit.get(a.commitId) ?? 0;
-          const seqB = seqByCommit.get(b.commitId) ?? 0;
-          return seqB - seqA;
+          const seqA = seqByCommit.get(a.r.commitId) ?? 0;
+          const seqB = seqByCommit.get(b.r.commitId) ?? 0;
+          return seqB - seqA || b.index - a.index;
         });
       return {
         ...p,
-        currentStatus: (resolutions.length > 0 ? resolutions[0].status : "open") as PromiseStatus,
+        currentStatus: (resolutions.length > 0 ? resolutions[0].r.status : "open") as PromiseStatus,
       };
     });
 
@@ -105,6 +113,7 @@ export function projectState(snapshot: LedgerSnapshot): ProjectedState {
     participants: snapshot.participants.filter((p) => eventIds.has(p.eventId)),
     knowledge: snapshot.knowledge.filter((k) => !isRetracted("knowledge", k.id)),
     knowledgeUses: snapshot.knowledgeUses.filter((u) => eventIds.has(u.eventId)),
+    knowledgeDenials: snapshot.knowledgeDenials.filter((d) => !isRetracted("knowledge_denial", d.id)),
     characterFacts: snapshot.characterFacts.filter((f) => !isRetracted("character_fact", f.id)),
     promises,
     maxStoryEnd,

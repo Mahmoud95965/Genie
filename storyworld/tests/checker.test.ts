@@ -14,8 +14,10 @@ import {
   checkLocationTeleport,
   checkPromiseOverdue,
   checkTwoPlaces,
+  runAllChecks,
+  type CheckerNote,
 } from "../lib/checker/rules";
-import { CHAR, ev, fact, know, makeState, part, promise, resolution, use } from "./helpers";
+import { CHAR, denial, ev, fact, know, makeState, part, promise, resolution, use } from "./helpers";
 
 describe("DEAD_ACTS", () => {
   const death = () =>
@@ -205,6 +207,178 @@ describe("DEAD_ACTS", () => {
   });
 });
 
+describe("DEAD_ACTS (M1.1): resurrection own-event exception (4a) and ties (4b)", () => {
+  const death = () =>
+    ev({ id: "e-death", kind: "death", summary: "مات سالم", spanStart: 2, spanEnd: 2 });
+  const deathFact = () => fact({ id: "f-dead", validFromEventId: "e-death" });
+
+  it("4a: a resurrection event casting the dead character as actor is NOT flagged, and is recorded as cleared", () => {
+    const state = makeState({
+      events: [
+        death(),
+        ev({ id: "e-res", kind: "action", summary: "فتح سالم عينيه وتكلم", spanStart: 4, spanEnd: 4 }),
+        ev({ id: "e-act", kind: "action", summary: "ضحك سالم", spanStart: 5, spanEnd: 5 }),
+      ],
+      participants: [
+        part("e-death", CHAR.salim, "victim"),
+        part("e-res", CHAR.salim, "actor"),
+        part("e-act", CHAR.salim, "actor"),
+      ],
+      facts: [
+        deathFact(),
+        fact({ id: "f-alive", kind: "alive", value: "حي", validFromEventId: "e-res" }),
+      ],
+    });
+    const notes: CheckerNote[] = [];
+    const findings = checkDeadActs(state, notes);
+    expect(findings).toHaveLength(0);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].type).toBe("own_event_resurrection");
+    expect(notes[0].factId).toBe("f-alive");
+    expect(notes[0].eventId).toBe("e-res");
+    // The note is surfaced by runAllChecks, and is not a finding.
+    const run = runAllChecks(state);
+    expect(run.findings).toHaveLength(0);
+    expect(run.notes).toHaveLength(1);
+    expect(run.notes[0].type).toBe("own_event_resurrection");
+  });
+
+  it("4a: an unrelated character's resurrection at t3 does not clear سالم's act at t3", () => {
+    const state = makeState({
+      events: [
+        death(),
+        ev({ id: "e-res-omar", kind: "action", summary: "عاد عمر إلى الحياة", spanStart: 3, spanEnd: 3 }),
+        ev({ id: "e-act", kind: "action", summary: "ضحك سالم", spanStart: 3, spanEnd: 3 }),
+      ],
+      participants: [
+        part("e-death", CHAR.salim, "victim"),
+        part("e-res-omar", CHAR.omar, "actor"),
+        part("e-act", CHAR.salim, "actor"),
+      ],
+      facts: [
+        deathFact(),
+        fact({
+          id: "f-alive-omar",
+          characterId: CHAR.omar,
+          kind: "alive",
+          value: "حي",
+          validFromEventId: "e-res-omar",
+        }),
+      ],
+    });
+    const findings = checkDeadActs(state);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("confirmed");
+  });
+
+  it("4b: dead and alive facts at equal span_end in the same commit: uncertain conflict, not confirmed", () => {
+    const state = makeState({
+      events: [
+        death(),
+        ev({ id: "e-alive", kind: "observation", summary: "سالم حي", spanStart: 2, spanEnd: 2 }),
+        ev({ id: "e-act", kind: "action", summary: "ضحك سالم", spanStart: 3, spanEnd: 3 }),
+      ],
+      participants: [
+        part("e-death", CHAR.salim, "victim"),
+        part("e-alive", CHAR.salim, "subject"),
+        part("e-act", CHAR.salim, "actor"),
+      ],
+      facts: [
+        deathFact(),
+        fact({ id: "f-alive", kind: "alive", value: "حي", validFromEventId: "e-alive" }),
+      ],
+    });
+    const findings = checkDeadActs(state);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("uncertain");
+    expect(findings[0].reason).toBe("conflicting_life_state_same_point");
+    expect(findings[0].subjects).toContain("f-dead");
+    expect(findings[0].subjects).toContain("f-alive");
+    // Both evidence quotes are cited.
+    expect(findings[0].evidence.some((e) => e.quote === "مات سالم")).toBe(true);
+    expect(findings[0].evidence.some((e) => e.quote === "سالم حي")).toBe(true);
+  });
+
+  it("4b: same facts in different commits: the later commit wins (spec rule kept)", () => {
+    const commits = [
+      {
+        id: "commit-1",
+        branchId: "branch-1",
+        commitSeq: 1,
+        parentCommitId: null,
+        author: "human",
+        idempotencyKey: null,
+        createdAt: "2026-11-22T00:00:00.000Z",
+      },
+      {
+        id: "commit-2",
+        branchId: "branch-1",
+        commitSeq: 2,
+        parentCommitId: "commit-1",
+        author: "human",
+        idempotencyKey: null,
+        createdAt: "2026-11-22T00:01:00.000Z",
+      },
+    ];
+    const events = [
+      death(),
+      ev({ id: "e-alive", kind: "observation", summary: "سالم حي", spanStart: 2, spanEnd: 2 }),
+      ev({ id: "e-act", kind: "action", summary: "ضحك سالم", spanStart: 3, spanEnd: 3 }),
+    ];
+    const participants = [
+      part("e-death", CHAR.salim, "victim"),
+      part("e-alive", CHAR.salim, "subject"),
+      part("e-act", CHAR.salim, "actor"),
+    ];
+    // Alive fact in the later commit wins: no flag.
+    const aliveWins = makeState({
+      commits,
+      events,
+      participants,
+      facts: [
+        deathFact(),
+        fact({ id: "f-alive", kind: "alive", value: "حي", validFromEventId: "e-alive", commitId: "commit-2" }),
+      ],
+    });
+    expect(checkDeadActs(aliveWins)).toHaveLength(0);
+    // Dead fact in the later commit wins: confirmed.
+    const deadWins = makeState({
+      commits,
+      events,
+      participants,
+      facts: [
+        fact({ id: "f-alive", kind: "alive", value: "حي", validFromEventId: "e-alive", commitId: "commit-1" }),
+        fact({ id: "f-dead", validFromEventId: "e-death", commitId: "commit-2" }),
+      ],
+    });
+    const findings = checkDeadActs(deadWins);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("confirmed");
+  });
+
+  it("4b: two dead facts at equal span_end: act after is confirmed as before", () => {
+    const state = makeState({
+      events: [
+        death(),
+        ev({ id: "e-death2", kind: "death", summary: "مات سالم مرة أخرى", spanStart: 2, spanEnd: 2 }),
+        ev({ id: "e-act", kind: "action", summary: "ضحك سالم", spanStart: 3, spanEnd: 3 }),
+      ],
+      participants: [
+        part("e-death", CHAR.salim, "victim"),
+        part("e-death2", CHAR.salim, "victim"),
+        part("e-act", CHAR.salim, "actor"),
+      ],
+      facts: [
+        deathFact(),
+        fact({ id: "f-dead2", validFromEventId: "e-death2" }),
+      ],
+    });
+    const findings = checkDeadActs(state);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("confirmed");
+  });
+});
+
 describe("KNOWLEDGE_LEAK", () => {
   const learn = () =>
     ev({ id: "e-learn", kind: "knowledge_transfer", summary: "قال عمر لليلى", spanStart: 3, spanEnd: 3 });
@@ -384,6 +558,191 @@ describe("KNOWLEDGE_LEAK", () => {
     expect(findings).toHaveLength(1);
     expect(findings[0].confidence).toBe("confirmed");
   });
+
+  it("M1.1 (6): closed-world, only learn is in a dream, no mark: uncertain learned_only_in_non_real_event", () => {
+    const state = makeState({
+      events: [
+        ev({
+          id: "e-dream-learn",
+          kind: "knowledge_transfer",
+          summary: "حلم كريم بالرسايل",
+          spanStart: 3,
+          spanEnd: 3,
+          realityScope: "dream",
+        }),
+        useEvent(),
+      ],
+      participants: [
+        part("e-dream-learn", CHAR.karim, "listener"),
+        part("e-use", CHAR.karim, "subject"),
+      ],
+      knowledge: [
+        know({ id: "k-1", characterId: CHAR.karim, learnedAtEventId: "e-dream-learn", learnedHow: "told" }),
+      ],
+      uses: [use({ eventId: "e-use" })],
+    });
+    const findings = checkKnowledgeLeak(state, {
+      closedWorldPropositionIds: new Set(["prop-1"]),
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("uncertain");
+    expect(findings[0].reason).toBe("learned_only_in_non_real_event");
+    // The dream learn event and its evidence quote are cited.
+    expect(findings[0].subjects).toContain("e-dream-learn");
+    expect(findings[0].evidence.some((e) => e.quote === "حلم كريم بالرسايل")).toBe(true);
+  });
+
+  it("M1.1 (6): dream learn with a reviewer learned_in_story mark clears the leak", () => {
+    const state = makeState({
+      events: [
+        ev({
+          id: "e-dream-learn",
+          kind: "knowledge_transfer",
+          summary: "حلم كريم بالرسايل",
+          spanStart: 3,
+          spanEnd: 3,
+          realityScope: "dream",
+        }),
+        useEvent(),
+      ],
+      participants: [
+        part("e-dream-learn", CHAR.karim, "listener"),
+        part("e-use", CHAR.karim, "subject"),
+      ],
+      knowledge: [
+        know({
+          id: "k-1",
+          characterId: CHAR.karim,
+          learnedAtEventId: "e-dream-learn",
+          learnedHow: "told",
+          learnedInStory: true,
+          learnedInStoryEvidence: [
+            {
+              quote: "تذكر كريم الحلم",
+              startOffset: 0,
+              endOffset: 15,
+              chapterRevisionId: "rev-1",
+              bodySha256: "sha",
+            },
+          ],
+        }),
+      ],
+      uses: [use({ eventId: "e-use" })],
+    });
+    expect(
+      checkKnowledgeLeak(state, { closedWorldPropositionIds: new Set(["prop-1"]) }),
+    ).toHaveLength(0);
+  });
+
+  it("M1.1 (6): non-real learn plus a later real learn before the use: no finding", () => {
+    const state = makeState({
+      events: [
+        ev({
+          id: "e-dream-learn",
+          kind: "knowledge_transfer",
+          summary: "حلم كريم بالرسايل",
+          spanStart: 3,
+          spanEnd: 3,
+          realityScope: "dream",
+        }),
+        ev({ id: "e-real-learn", kind: "knowledge_transfer", summary: "قال عمر لكريم", spanStart: 5, spanEnd: 5 }),
+        useEvent(),
+      ],
+      participants: [
+        part("e-dream-learn", CHAR.karim, "listener"),
+        part("e-real-learn", CHAR.omar, "speaker"),
+        part("e-real-learn", CHAR.karim, "listener"),
+        part("e-use", CHAR.karim, "subject"),
+      ],
+      knowledge: [
+        know({ id: "k-1", characterId: CHAR.karim, learnedAtEventId: "e-dream-learn", learnedHow: "told" }),
+        know({ id: "k-2", characterId: CHAR.karim, learnedAtEventId: "e-real-learn", learnedHow: "told" }),
+      ],
+      uses: [use({ eventId: "e-use" })],
+    });
+    expect(
+      checkKnowledgeLeak(state, { closedWorldPropositionIds: new Set(["prop-1"]) }),
+    ).toHaveLength(0);
+  });
+
+  // --- M1.1 item 3: explicit non-knowledge records (knowledge_denial) ---
+  const denyEvent = () =>
+    ev({
+      id: "e-deny",
+      kind: "observation",
+      summary: "قال كريم: لا أعرف أين الرسايل",
+      spanStart: 2,
+      spanEnd: 2,
+    });
+  const denialEvidence = [
+    {
+      quote: "قال كريم: لا أعرف أين الرسايل",
+      startOffset: 0,
+      endOffset: 30,
+      chapterRevisionId: "rev-1",
+      bodySha256: "sha",
+    },
+  ];
+
+  it("M1.1 (3): denial at t2, use at t3, no learning: confirmed (open world)", () => {
+    const state = makeState({
+      events: [denyEvent(), useEvent()],
+      participants: [part("e-deny", CHAR.karim, "speaker"), part("e-use", CHAR.karim, "subject")],
+      denials: [denial({ id: "d-1", evidence: denialEvidence })],
+      uses: [use({ eventId: "e-use" })],
+    });
+    const findings = checkKnowledgeLeak(state);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("confirmed");
+    expect(findings[0].subjects).toContain("d-1");
+    expect(findings[0].evidence.some((e) => e.quote === "قال كريم: لا أعرف أين الرسايل")).toBe(true);
+  });
+
+  it("M1.1 (3): denial at t2, real learning at t3, use at t6: no finding", () => {
+    const state = makeState({
+      events: [
+        denyEvent(),
+        ev({ id: "e-learn", kind: "knowledge_transfer", summary: "قال عمر لكريم", spanStart: 3, spanEnd: 3 }),
+        useEvent(),
+      ],
+      participants: [
+        part("e-deny", CHAR.karim, "speaker"),
+        part("e-learn", CHAR.omar, "speaker"),
+        part("e-learn", CHAR.karim, "listener"),
+        part("e-use", CHAR.karim, "subject"),
+      ],
+      denials: [denial({ id: "d-1", evidence: denialEvidence })],
+      knowledge: [know({ id: "k-1", characterId: CHAR.karim, learnedAtEventId: "e-learn" })],
+      uses: [use({ eventId: "e-use" })],
+    });
+    expect(checkKnowledgeLeak(state)).toHaveLength(0);
+  });
+
+  it("M1.1 (3): denial at t2, use at t1 before the denial: no confirmation from the denial alone", () => {
+    const state = makeState({
+      events: [denyEvent(), useEvent({ spanStart: 1, spanEnd: 1 })],
+      participants: [part("e-deny", CHAR.karim, "speaker"), part("e-use", CHAR.karim, "subject")],
+      denials: [denial({ id: "d-1", evidence: denialEvidence })],
+      uses: [use({ eventId: "e-use" })],
+    });
+    const findings = checkKnowledgeLeak(state);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("uncertain");
+    expect(findings[0].reason).toBe("open_world");
+  });
+
+  it("M1.1 (3): denial with unknown use time: uncertain unknown_use_time, never confirmed", () => {
+    const state = makeState({
+      events: [denyEvent(), useEvent({ spanStart: null, spanEnd: null })],
+      participants: [part("e-deny", CHAR.karim, "speaker"), part("e-use", CHAR.karim, "subject")],
+      denials: [denial({ id: "d-1", evidence: denialEvidence })],
+      uses: [use({ eventId: "e-use" })],
+    });
+    const findings = checkKnowledgeLeak(state);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("uncertain");
+    expect(findings[0].reason).toBe("unknown_use_time");
+  });
 });
 
 describe("TWO_PLACES", () => {
@@ -408,12 +767,75 @@ describe("TWO_PLACES", () => {
     expect(checkTwoPlaces(state)).toHaveLength(0);
   });
 
-  it("intervals sharing one endpoint count as overlapping (spec formula uses <=)", () => {
+  it("M1.1 (5): intervals touching at exactly one shared endpoint are uncertain, not confirmed", () => {
     const state = makeState({
-      events: [at("e-a", "المنارة", 1, 5), at("e-b", "الميناء", 5, 8)],
+      events: [at("e-a", "المنارة", 1, 2), at("e-b", "الميناء", 2, 3)],
       participants: [part("e-a", CHAR.omar, "subject"), part("e-b", CHAR.omar, "subject")],
     });
-    expect(checkTwoPlaces(state)).toHaveLength(1);
+    const findings = checkTwoPlaces(state);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("uncertain");
+    expect(findings[0].reason).toBe("touching_interval");
+  });
+
+  it("M1.1 (5): [1,3] vs [2,4] positive-length overlap is confirmed", () => {
+    const state = makeState({
+      events: [at("e-a", "المنارة", 1, 3), at("e-b", "الميناء", 2, 4)],
+      participants: [part("e-a", CHAR.omar, "subject"), part("e-b", CHAR.omar, "subject")],
+    });
+    const findings = checkTwoPlaces(state);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("confirmed");
+  });
+
+  it("M1.1 (5): [1,2] vs [3,4] separated intervals are NOT flagged", () => {
+    const state = makeState({
+      events: [at("e-a", "المنارة", 1, 2), at("e-b", "الميناء", 3, 4)],
+      participants: [part("e-a", CHAR.omar, "subject"), part("e-b", CHAR.omar, "subject")],
+    });
+    expect(checkTwoPlaces(state)).toHaveLength(0);
+  });
+
+  it("M1.1 (5): two point events at the same instant are confirmed", () => {
+    const state = makeState({
+      events: [at("e-a", "المنارة", 2, 2), at("e-b", "الميناء", 2, 2)],
+      participants: [part("e-a", CHAR.omar, "subject"), part("e-b", CHAR.omar, "subject")],
+    });
+    const findings = checkTwoPlaces(state);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("confirmed");
+  });
+
+  it("M1.1 (5): a point on an endpoint of the other interval is uncertain", () => {
+    const state = makeState({
+      events: [at("e-a", "المنارة", 2, 2), at("e-b", "الميناء", 2, 3)],
+      participants: [part("e-a", CHAR.omar, "subject"), part("e-b", CHAR.omar, "subject")],
+    });
+    const findings = checkTwoPlaces(state);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("uncertain");
+    expect(findings[0].reason).toBe("touching_interval");
+  });
+
+  it("M1.1 (5): a point strictly inside the other interval is confirmed", () => {
+    const state = makeState({
+      events: [at("e-a", "المنارة", 2, 2), at("e-b", "الميناء", 1, 3)],
+      participants: [part("e-a", CHAR.omar, "subject"), part("e-b", CHAR.omar, "subject")],
+    });
+    const findings = checkTwoPlaces(state);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("confirmed");
+  });
+
+  it("M1.1 (5): a point on the far endpoint of the other interval is uncertain", () => {
+    const state = makeState({
+      events: [at("e-a", "المنارة", 3, 3), at("e-b", "الميناء", 1, 3)],
+      participants: [part("e-a", CHAR.omar, "subject"), part("e-b", CHAR.omar, "subject")],
+    });
+    const findings = checkTwoPlaces(state);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].confidence).toBe("uncertain");
+    expect(findings[0].reason).toBe("touching_interval");
   });
 
   it("null bounds never flag", () => {

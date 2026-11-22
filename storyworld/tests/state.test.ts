@@ -167,6 +167,60 @@ describe("repository: commit protocol", () => {
   });
 });
 
+describe("repository: M1.1 learned_in_story mark (item 6)", () => {
+  it("marks a knowledge entry with evidence; empty evidence and unknown ids fail", () => {
+    const { repo, branch, revision, span } = setup();
+    const character = repo.getOrCreateCharacter(branch.projectId, "كريم");
+    const committed = repo.commit({
+      branchId: branch.id,
+      expectedHead: repo.getHead(branch.id),
+      items: {
+        ...emptyCommitItems(),
+        propositions: [{ id: "prop-1", statement: "الرسايل مخبأة", evidence: [span] }],
+        events: [
+          {
+            id: "evt-learn",
+            chapterRevisionId: revision.id,
+            kind: "knowledge_transfer",
+            summary: "حلم كريم",
+            location: null,
+            storyTime: null,
+            spanStart: 3,
+            spanEnd: 3,
+            realityScope: "dream",
+            certainty: "asserted",
+            participants: [{ characterId: character.id, role: "listener" }],
+            evidence: [span],
+          },
+        ],
+        knowledge: [
+          {
+            id: "k-1",
+            characterId: character.id,
+            propositionId: "prop-1",
+            learnedAtEventId: "evt-learn",
+            learnedHow: "told",
+            certainty: "asserted",
+            evidence: [span],
+          },
+        ],
+      },
+    });
+    const knowledgeId = committed.inserted.knowledge[0].id;
+    expect(committed.inserted.knowledge[0].learnedInStory).toBe(false);
+    const markSpan = { ...span, quote: "تذكر كريم الحلم" };
+    const marked = repo.markKnowledgeLearnedInStory(knowledgeId, [markSpan]);
+    expect(marked.learnedInStory).toBe(true);
+    expect(marked.learnedInStoryEvidence).toHaveLength(1);
+    // The mark is annotation, not a new commit: the head did not move.
+    expect(repo.getHead(branch.id)).toBe(committed.commit.id);
+    expect(() => repo.markKnowledgeLearnedInStory(knowledgeId, [])).toThrow(ValidationFailedError);
+    expect(() => repo.markKnowledgeLearnedInStory("no-such-id", [markSpan])).toThrow(
+      /Unknown knowledge entry/,
+    );
+  });
+});
+
 describe("repository: retractions and chapters", () => {
   it("a retraction removes the entry from projections but not from the ledger", () => {
     const { repo, branch, revision, span } = setup();

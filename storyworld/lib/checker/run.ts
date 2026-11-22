@@ -5,11 +5,17 @@
  * the findings against the current head commit. Re-running on the same
  * head does not duplicate an open finding with the same rule, subjects
  * and confidence.
+ *
+ * M1.1: `runCheckerDetailed` also returns the run's notes (e.g. the
+ * own-event resurrection clearances from item 4a). Notes are not
+ * findings and are not stored — they are returned to the caller so a
+ * reviewer can see why a would-be finding was cleared. `runChecker`
+ * keeps the M1 return shape (findings only).
  */
 import { projectState } from "../state/projections";
 import type { StoryworldRepository } from "../state/repository";
 import type { Finding } from "../state/types";
-import { runAllChecks, type CheckerOptions } from "./rules";
+import { runAllChecks, type CheckerNote, type CheckerOptions } from "./rules";
 
 function sameSubjects(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;
@@ -18,16 +24,16 @@ function sameSubjects(a: string[], b: string[]): boolean {
   return sortedA.every((v, i) => v === sortedB[i]);
 }
 
-export function runChecker(
+export function runCheckerDetailed(
   repo: StoryworldRepository,
   branchId: string,
   options: CheckerOptions = {},
-): Finding[] {
+): { findings: Finding[]; notes: CheckerNote[] } {
   const snapshot = repo.snapshot(branchId);
   const head = snapshot.headCommitId;
-  if (head === null) return [];
+  if (head === null) return { findings: [], notes: [] };
   const state = projectState(snapshot);
-  const checks = runAllChecks(state, options);
+  const { findings: checks, notes } = runAllChecks(state, options);
   const stored: Finding[] = [];
   for (const finding of checks) {
     const duplicate = repo
@@ -56,5 +62,13 @@ export function runChecker(
       }),
     );
   }
-  return stored;
+  return { findings: stored, notes };
+}
+
+export function runChecker(
+  repo: StoryworldRepository,
+  branchId: string,
+  options: CheckerOptions = {},
+): Finding[] {
+  return runCheckerDetailed(repo, branchId, options).findings;
 }

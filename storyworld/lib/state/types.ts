@@ -38,7 +38,14 @@ export type PromiseStatusChange = "raised" | "fulfilled" | "violated" | "abandon
 /** A promise's current status: latest resolution, defaulting to `open`. */
 export type PromiseStatus = "open" | "fulfilled" | "violated" | "abandoned";
 
-export type EntryTable = "event" | "knowledge" | "character_fact" | "promise" | "proposition";
+export type EntryTable =
+  | "event"
+  | "knowledge"
+  | "character_fact"
+  | "promise"
+  | "proposition"
+  | "promise_resolution"
+  | "knowledge_denial";
 
 export type ChapterSource = "human" | "writer" | "repair" | "import";
 
@@ -164,6 +171,20 @@ export interface KnowledgeEntry {
   learnedAtEventId: string;
   learnedHow: LearnedHow;
   certainty: KnowledgeCertainty;
+  /**
+   * M1.1 item 6 (in-memory only; SQL and extractor schema unchanged):
+   * reviewer mark that the character retained the knowledge in-story
+   * even though the learn event itself was non-asserted or non-real
+   * (e.g. a prophetic dream they later act on). With the mark, the
+   * learn event counts as normal and clears a would-be
+   * KNOWLEDGE_LEAK. `learnedInStoryEvidence` is the quote showing the
+   * character retains or refers to what they learned. This is reviewer
+   * workflow annotation (like `Finding.resolution`), not world truth:
+   * it is set via `markKnowledgeLearnedInStory`, never by the
+   * extractor, and does not change the ledger's append-only rows.
+   */
+  learnedInStory: boolean;
+  learnedInStoryEvidence: VerifiedSpan[];
   evidence: VerifiedSpan[];
 }
 
@@ -172,6 +193,26 @@ export interface KnowledgeUse {
   branchId: string;
   characterId: string;
   propositionId: string;
+}
+
+/**
+ * M1.1 item 3 (in-memory only; SQL and extractor schema unchanged):
+ * an explicit, evidenced record that a character does NOT know a
+ * proposition at a given event — the text itself states the
+ * non-knowledge. Append-only and retractable like other ledger rows.
+ * It confirms a KNOWLEDGE_LEAK only for uses at or after the stated
+ * event, with the use asserted, real, and time known, and with no
+ * current knowledge entry learned before the use (a later clean
+ * learning clears it).
+ */
+export interface KnowledgeDenial {
+  id: string;
+  branchId: string;
+  commitId: string;
+  characterId: string;
+  propositionId: string;
+  statedAtEventId: string;
+  evidence: VerifiedSpan[];
 }
 
 export interface CharacterFactEntry {

@@ -28,6 +28,7 @@ import type {
   Finding,
   FindingResolution,
   KnowledgeCertainty,
+  KnowledgeDenial,
   KnowledgeEntry,
   KnowledgeUse,
   LearnedHow,
@@ -127,12 +128,24 @@ export interface NewKnowledge {
   learnedHow: LearnedHow;
   certainty: KnowledgeCertainty;
   evidence: VerifiedSpan[];
+  /** M1.1 item 6: reviewer mark (default false; normally set post-commit). */
+  learnedInStory?: boolean;
+  learnedInStoryEvidence?: VerifiedSpan[];
 }
 
 export interface NewKnowledgeUse {
   eventId: string;
   characterId: string;
   propositionId: string;
+}
+
+/** M1.1 item 3: an explicit evidenced record of non-knowledge. */
+export interface NewKnowledgeDenial {
+  id: string;
+  characterId: string;
+  propositionId: string;
+  statedAtEventId: string;
+  evidence: VerifiedSpan[];
 }
 
 export interface NewCharacterFact {
@@ -153,6 +166,14 @@ export interface NewPromise {
   evidence: VerifiedSpan[];
 }
 
+/** M1.1 item 2: a reviewer-chosen resolution of an existing promise. */
+export interface NewPromiseResolution {
+  id: string;
+  promiseId: string;
+  resolvedAtEventId: string;
+  status: Exclude<PromiseStatus, "open">;
+}
+
 export interface RetractInput {
   entryTable: EntryTable;
   entryId: string;
@@ -166,6 +187,10 @@ export interface CommitItems {
   knowledgeUses: NewKnowledgeUse[];
   characterFacts: NewCharacterFact[];
   promises: NewPromise[];
+  /** M1.1 item 2: resolutions of already-committed promises. */
+  resolutions: NewPromiseResolution[];
+  /** M1.1 item 3: explicit records of non-knowledge. */
+  knowledgeDenials: NewKnowledgeDenial[];
 }
 
 export function emptyCommitItems(): CommitItems {
@@ -176,6 +201,8 @@ export function emptyCommitItems(): CommitItems {
     knowledgeUses: [],
     characterFacts: [],
     promises: [],
+    resolutions: [],
+    knowledgeDenials: [],
   };
 }
 
@@ -199,6 +226,8 @@ export interface CommitResult {
     knowledgeUses: KnowledgeUse[];
     characterFacts: CharacterFactEntry[];
     promises: PromiseEntry[];
+    resolutions: PromiseResolution[];
+    knowledgeDenials: KnowledgeDenial[];
   };
   retractions: Retraction[];
 }
@@ -228,6 +257,8 @@ export interface LedgerSnapshot {
   participants: EventParticipant[];
   knowledge: KnowledgeEntry[];
   knowledgeUses: KnowledgeUse[];
+  /** M1.1 item 3: explicit records of non-knowledge. */
+  knowledgeDenials: KnowledgeDenial[];
   characterFacts: CharacterFactEntry[];
   promises: PromiseEntry[];
   promiseResolutions: PromiseResolution[];
@@ -302,6 +333,17 @@ export interface StoryworldRepository {
   addFinding(input: NewFinding): Finding;
   listFindings(branchId: string, resolution?: FindingResolution): Finding[];
   resolveFinding(findingId: string, resolution: FindingResolution): Finding;
+
+  /**
+   * M1.1 item 6: reviewer mark on a committed knowledge entry. Sets
+   * `learnedInStory` with the supporting evidence quote(s). This is
+   * workflow annotation (like resolving a finding), not a ledger
+   * change: it mutates only these two annotation fields on the entry
+   * and never rewrites history. Evidence must be non-empty; the quote
+   * should come from the chapter text showing the character retains
+   * or refers to what they learned.
+   */
+  markKnowledgeLearnedInStory(knowledgeId: string, evidence: VerifiedSpan[]): KnowledgeEntry;
 }
 
 export type { PromiseStatus };

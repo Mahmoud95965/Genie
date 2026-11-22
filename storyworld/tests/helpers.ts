@@ -13,6 +13,7 @@ import type {
   Commit,
   EventEntry,
   EventParticipant,
+  KnowledgeDenial,
   KnowledgeEntry,
   KnowledgeUse,
   ParticipantRole,
@@ -86,6 +87,8 @@ export function know(overrides: Partial<KnowledgeEntry> & { id: string }): Knowl
     learnedAtEventId: "e-learn",
     learnedHow: "told",
     certainty: "asserted",
+    learnedInStory: false,
+    learnedInStoryEvidence: [],
     evidence: [{ ...DEFAULT_SPAN }],
     ...overrides,
   };
@@ -96,6 +99,19 @@ export function use(overrides: Partial<KnowledgeUse> & { eventId: string }): Kno
     branchId: "branch-1",
     characterId: CHAR.karim,
     propositionId: "prop-1",
+    ...overrides,
+  };
+}
+
+/** M1.1 item 3: an explicit record that a character does not know a proposition at an event. */
+export function denial(overrides: Partial<KnowledgeDenial> & { id: string }): KnowledgeDenial {
+  return {
+    branchId: "branch-1",
+    commitId: "commit-1",
+    characterId: CHAR.karim,
+    propositionId: "prop-1",
+    statedAtEventId: "e-deny",
+    evidence: [{ ...DEFAULT_SPAN }],
     ...overrides,
   };
 }
@@ -152,6 +168,7 @@ export interface StateInput {
   facts?: CharacterFactEntry[];
   knowledge?: KnowledgeEntry[];
   uses?: KnowledgeUse[];
+  denials?: KnowledgeDenial[];
   promises?: PromiseEntry[];
   resolutions?: PromiseResolution[];
   propositions?: Proposition[];
@@ -186,6 +203,7 @@ export function makeState(input: StateInput = {}): ProjectedState {
     participants: input.participants ?? [],
     knowledge: input.knowledge ?? [],
     knowledgeUses: input.uses ?? [],
+    knowledgeDenials: input.denials ?? [],
     characterFacts: input.facts ?? [],
     promises: input.promises ?? [],
     promiseResolutions: input.resolutions ?? [],

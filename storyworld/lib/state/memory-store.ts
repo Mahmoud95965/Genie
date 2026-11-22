@@ -25,6 +25,7 @@ import type {
   EventParticipant,
   Finding,
   FindingResolution,
+  KnowledgeDenial,
   KnowledgeEntry,
   KnowledgeUse,
   Project,
@@ -32,6 +33,7 @@ import type {
   PromiseResolution,
   Proposition,
   Retraction,
+  VerifiedSpan,
 } from "./types";
 import {
   BranchingDisabledError,
@@ -68,6 +70,7 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
   private participants: EventParticipant[] = [];
   private knowledge: KnowledgeEntry[] = [];
   private knowledgeUses: KnowledgeUse[] = [];
+  private knowledgeDenials: KnowledgeDenial[] = [];
   private characterFacts: CharacterFactEntry[] = [];
   private promises: PromiseEntry[] = [];
   private promiseResolutions: PromiseResolution[] = [];
@@ -147,6 +150,8 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
             knowledgeUses: [],
             characterFacts: [],
             promises: [],
+            resolutions: [],
+            knowledgeDenials: [],
           },
           retractions: [],
         };
@@ -214,6 +219,8 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
       learnedAtEventId: k.learnedAtEventId,
       learnedHow: k.learnedHow,
       certainty: k.certainty,
+      learnedInStory: k.learnedInStory ?? false,
+      learnedInStoryEvidence: k.learnedInStoryEvidence ?? [],
       evidence: k.evidence,
     }));
     const insertedKnowledgeUses: KnowledgeUse[] = items.knowledgeUses.map((u) => ({
@@ -242,6 +249,23 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
       deadlineCondition: p.deadlineCondition,
       evidence: p.evidence,
     }));
+    const insertedResolutions: PromiseResolution[] = items.resolutions.map((r) => ({
+      id: r.id,
+      branchId: request.branchId,
+      commitId: commit.id,
+      promiseId: r.promiseId,
+      resolvedAtEventId: r.resolvedAtEventId,
+      status: r.status,
+    }));
+    const insertedDenials: KnowledgeDenial[] = items.knowledgeDenials.map((d) => ({
+      id: d.id,
+      branchId: request.branchId,
+      commitId: commit.id,
+      characterId: d.characterId,
+      propositionId: d.propositionId,
+      statedAtEventId: d.statedAtEventId,
+      evidence: d.evidence,
+    }));
     const insertedRetractions: Retraction[] = (request.retracts ?? []).map((r) => ({
       id: randomUUID(),
       branchId: request.branchId,
@@ -258,6 +282,8 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
     this.knowledgeUses.push(...insertedKnowledgeUses);
     this.characterFacts.push(...insertedFacts);
     this.promises.push(...insertedPromises);
+    this.promiseResolutions.push(...insertedResolutions);
+    this.knowledgeDenials.push(...insertedDenials);
     this.retractions.push(...insertedRetractions);
     this.heads.set(request.branchId, commit.id);
 
@@ -271,6 +297,8 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
         knowledgeUses: insertedKnowledgeUses,
         characterFacts: insertedFacts,
         promises: insertedPromises,
+        resolutions: insertedResolutions,
+        knowledgeDenials: insertedDenials,
       },
       retractions: insertedRetractions,
     };
@@ -318,6 +346,8 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
       ["knowledge", items.knowledge.map((k) => k.id)],
       ["character_fact", items.characterFacts.map((f) => f.id)],
       ["promise", items.promises.map((p) => p.id)],
+      ["promise_resolution", items.resolutions.map((r) => r.id)],
+      ["knowledge_denial", items.knowledgeDenials.map((d) => d.id)],
     ] as Array<[string, string[]]>) {
       for (const id of ids) {
         const key = `${table}:${id}`;
@@ -349,6 +379,16 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
     for (const p of items.promises) {
       if (this.promises.some((x) => x.branchId === branch.id && x.id === p.id)) {
         issues.push({ path: "$.promises", message: `id ${p.id} already exists` });
+      }
+    }
+    for (const r of items.resolutions) {
+      if (this.promiseResolutions.some((x) => x.branchId === branch.id && x.id === r.id)) {
+        issues.push({ path: "$.resolutions", message: `id ${r.id} already exists` });
+      }
+    }
+    for (const d of items.knowledgeDenials) {
+      if (this.knowledgeDenials.some((x) => x.branchId === branch.id && x.id === d.id)) {
+        issues.push({ path: "$.knowledgeDenials", message: `id ${d.id} already exists` });
       }
     }
 
@@ -461,6 +501,39 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
       checkEvidence(`${path}.evidence`, p.evidence);
     }
 
+    // M1.1 item 2: resolutions target an existing promise (or one
+    // raised in this same commit) and a known resolved-at event.
+    const knownPromises = new Set(
+      this.promises.filter((p) => p.branchId === branch.id).map((p) => p.id),
+    );
+    for (const p of items.promises) knownPromises.add(p.id);
+    for (const [i, r] of items.resolutions.entries()) {
+      const path = `$.resolutions[${i}]`;
+      if (!knownPromises.has(r.promiseId)) {
+        issues.push({ path, message: `unknown promise ${r.promiseId} in this branch` });
+      }
+      if (!knownEvents.has(r.resolvedAtEventId)) {
+        issues.push({ path, message: `unknown resolved-at event ${r.resolvedAtEventId} in this branch` });
+      }
+      if (r.status !== "fulfilled" && r.status !== "violated" && r.status !== "abandoned") {
+        issues.push({ path, message: `status must be fulfilled, violated, or abandoned` });
+      }
+    }
+
+    // M1.1 item 3: a denial names a known character and proposition, is
+    // stated at a known event, and carries at least one evidence span.
+    for (const [i, d] of items.knowledgeDenials.entries()) {
+      const path = `$.knowledgeDenials[${i}]`;
+      checkCharacter(`${path}.characterId`, d.characterId);
+      if (!knownPropositions.has(d.propositionId)) {
+        issues.push({ path, message: `unknown proposition ${d.propositionId} in this branch` });
+      }
+      if (!knownEvents.has(d.statedAtEventId)) {
+        issues.push({ path, message: `unknown stated-at event ${d.statedAtEventId} in this branch` });
+      }
+      checkEvidence(`${path}.evidence`, d.evidence);
+    }
+
     for (const [i, r] of (request.retracts ?? []).entries()) {
       const path = `$.retracts[${i}]`;
       const exists =
@@ -469,6 +542,10 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
         (r.entryTable === "character_fact" &&
           this.characterFacts.some((x) => x.branchId === branch.id && x.id === r.entryId)) ||
         (r.entryTable === "promise" && this.promises.some((x) => x.branchId === branch.id && x.id === r.entryId)) ||
+        (r.entryTable === "promise_resolution" &&
+          this.promiseResolutions.some((x) => x.branchId === branch.id && x.id === r.entryId)) ||
+        (r.entryTable === "knowledge_denial" &&
+          this.knowledgeDenials.some((x) => x.branchId === branch.id && x.id === r.entryId)) ||
         (r.entryTable === "proposition" &&
           this.propositions.some((x) => x.branchId === branch.id && x.id === r.entryId));
       if (!exists) {
@@ -652,6 +729,7 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
       knowledgeUses: this.knowledgeUses.filter(
         (u) => u.branchId === branchId && this.events.some((e) => e.id === u.eventId && inScope(e.commitId)),
       ),
+      knowledgeDenials: this.knowledgeDenials.filter((d) => d.branchId === branchId && inScope(d.commitId)),
       characterFacts: this.characterFacts.filter((f) => f.branchId === branchId && inScope(f.commitId)),
       promises: this.promises.filter((p) => p.branchId === branchId && inScope(p.commitId)),
       promiseResolutions: this.promiseResolutions.filter((r) => r.branchId === branchId && inScope(r.commitId)),
@@ -692,5 +770,23 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
     // world truth lives only in the ledger (spec section 3).
     finding.resolution = resolution;
     return finding;
+  }
+
+  markKnowledgeLearnedInStory(knowledgeId: string, evidence: VerifiedSpan[]): KnowledgeEntry {
+    const entry = this.knowledge.find((k) => k.id === knowledgeId);
+    if (!entry) throw new NotFoundError(`Unknown knowledge entry: ${knowledgeId}`);
+    if (!Array.isArray(evidence) || evidence.length === 0) {
+      throw new ValidationFailedError([
+        {
+          path: "$.learnedInStoryEvidence",
+          message: "at least one evidence span is required to mark learned_in_story",
+        },
+      ]);
+    }
+    // Reviewer annotation only (see the interface doc): no ledger row
+    // is created, updated, or retracted by this call.
+    entry.learnedInStory = true;
+    entry.learnedInStoryEvidence = evidence;
+    return entry;
   }
 }
