@@ -9,7 +9,7 @@ export const arMessages: Messages = {
     description:
       "جيني استوديو مشاريع رقمية مستقل، يركّز على تخيّل وبناء وتنمية المنتجات والمنصات والمشاريع الرقمية.",
     workDescription:
-      "مشاريع جيني — Port Said Hub ومنصة خدمات قنا وتجارب Genie ونموذج Genie. مشاريع حقيقية، موسومة بصدق.",
+      "مشاريع جيني — Port Said Hub ومنصة خدمات قنا وتجارب Genie ونموذج Genie ومحرك اتساق عالم القصة. مشاريع حقيقية، موسومة بصدق.",
     modelDescription:
       "تحدث مع نموذج Genie — نموذج ذكاء اصطناعي من Genie، جرّبه مجاناً بحد يومي.",
     aboutDescription:

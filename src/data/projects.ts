@@ -131,6 +131,38 @@ export const projects: Project[] = [
     noteAr: "مفهوم / تجربة — لا يُعرض هنا أي شيء على أنه منتج مكتمل أو نتيجة.",
   },
   {
+    slug: "storyworld",
+    name: "Story-World Consistency Engine",
+    short:
+      "An engine that wraps an AI model with an explicit, evolving world state behind a story's chapters — typed events, character facts, knowledge and open promises, each backed by verbatim evidence — so contradictions can be flagged and a human decides the repair.",
+    category: "AI Tool · Story Consistency",
+    status: "In development",
+    accent: "cyan",
+    stack: ["Next.js", "TypeScript", "OpenRouter"],
+    links: [],
+    challenge:
+      "Long stories contradict themselves: a character who died acts again, a secret is used by someone who never learned it, a promise is forgotten. Readers notice; writers lose track. Memory inside a model is not a record — it drifts, and nothing can point at the evidence.",
+    concept:
+      "Keep the story's world as an explicit, append-only ledger: every event, fact and promise is a typed record backed by a verbatim quote with verified offsets, grouped into commits a human reviews and accepts. A deterministic checker flags contradictions against that state, and a writer (in a later milestone) drafts new scenes conditioned on it. The model proposes; only the reviewed commit protocol writes.",
+    design:
+      "No public demo yet. The engine is being built milestone by milestone, in the open about what each milestone does and does not do — starting with an offline scaffold and a small Arabic dev fixture, before any live model call, review queue, or checker.",
+    development:
+      "M0 is built: the offline scaffold — OpenRouter client with an allowlist and live-call gating, the extractor contract (prompt extractor.v2 and the GenieExtractorOutput schema), evidence verification over NFC code-point offsets, an in-memory job queue and worker, the starter migration file (not executed), and the dev fixture with a recorded extractor response. M1 (review queue, commit ledger, rule checker) and M2 (writer) are not built yet. No live model calls have been made; no public demo exists.",
+    note: "In development — M0 only: offline scaffold, extractor contract, evidence verification and dev fixture. No live model calls yet, no public demo.",
+    shortAr:
+      "محرك يغلّف نموذج ذكاء اصطناعي بحالة عالم صريحة ومتطورة خلف فصول القصة — أحداث مكتوبة، وحقائق شخصيات، ومعرفة، ووعود مفتوحة، كل منها مدعوم بدليل حرفي — حتى يمكن رصد التناقضات ويقرر الإنسان الإصلاح.",
+    categoryAr: "أداة ذكاء اصطناعي · اتساق القصص",
+    challengeAr:
+      "القصص الطويلة تناقض نفسها: شخصية ماتت تتصرف مجدداً، أو سر يستخدمه من لم يتعلمه أبداً، أو وعد يُنسى. القراء يلاحظون، والكتّاب يفقدون التتبع. الذاكرة داخل النموذج ليست سجلاً — فهي تنحرف، ولا شيء فيها يشير إلى الدليل.",
+    conceptAr:
+      "الحفاظ على عالم القصة كسجل صريح لا يُعدَّل إلا بالإضافة: كل حدث وحقيقة ووعد سجل مكتوب مدعوم باقتباس حرفي بإزاحات موثقة، مجمّع في التزامات يراجعها الإنسان ويقبلها. وفاحص حتمي يرصد التناقضات مقابل تلك الحالة، وكاتب (في مرحلة لاحقة) يصوغ مشاهد جديدة مشروطة بها. النموذج يقترح، وبروتوكول الالتزام المراجَع وحده هو الذي يكتب.",
+    designAr:
+      "لا عرض عام بعد. يُبنى المحرك مرحلة بمرحلة، مع وضوح حول ما تفعله كل مرحلة وما لا تفعله — بدءاً بهيكل يعمل دون اتصال وقصة اختبار عربية قصيرة، قبل أي استدعاء حي للنموذج أو قائمة مراجعة أو فاحص.",
+    developmentAr:
+      "المرحلة M0 مبنية: الهيكل الذي يعمل دون اتصال — عميل OpenRouter بقائمة مسموحات وبوابة للمكالمات الحية، وعقد المستخرج (القالب extractor.v2 ومخطط GenieExtractorOutput)، والتحقق من الأدلة بإزاحات نقاط ترميز NFC، وقائمة مهام ووحدة عامل في الذاكرة، وملف الترحيل الأولي (غير منفَّذ)، وقصة الاختبار مع استجابة مستخرج مسجلة. المرحلتان M1 (قائمة المراجعة وسجل الالتزام والفاحص) وM2 (الكاتب) غير مبنيتين بعد. لم تُجرَ أي مكالمات حية للنموذج بعد، ولا يوجد عرض عام.",
+    noteAr: "قيد التطوير — المرحلة M0 فقط: هيكل دون اتصال، وعقد المستخرج، والتحقق من الأدلة، وقصة اختبار. لا مكالمات حية للنموذج بعد، ولا عرض عام.",
+  },
+  {
     slug: "genie-model",
     name: "Genie Model",
     short:

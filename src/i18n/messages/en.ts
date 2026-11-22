@@ -7,7 +7,7 @@ export const enMessages = {
     description:
       "Genie is an independent digital venture studio focused on imagining, building, and growing digital products, platforms, and ventures.",
     workDescription:
-      "Our ventures from Genie — Port Said Hub, Qena Services Platform, Genie Experiments, and Genie Model. Real projects, honestly labelled.",
+      "Our ventures from Genie — Port Said Hub, Qena Services Platform, Genie Experiments, Genie Model, and the Story-World Consistency Engine. Real projects, honestly labelled.",
     modelDescription:
       "Chat with Genie Model — an AI model by Genie, free to try with a daily limit.",
     aboutDescription:
