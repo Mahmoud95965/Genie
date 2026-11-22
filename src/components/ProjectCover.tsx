@@ -75,6 +75,16 @@ export default function ProjectCover({
           <circle cx="200" cy="150" r="4" fill="#67E8F9" />
         </svg>
       )}
+      {project.slug === "genie-model" && (
+        <svg viewBox="0 0 400 240" className="absolute inset-0 h-full w-full" aria-hidden="true">
+          <path d="M70 170 L150 80 L230 160 L310 60" fill="none" stroke="#A78BFA" strokeWidth="1.5" opacity="0.8" />
+          <circle cx="70" cy="170" r="6" fill="#A78BFA" />
+          <circle cx="150" cy="80" r="6" fill="#C4B5FD" />
+          <circle cx="230" cy="160" r="5" fill="#A78BFA" />
+          <circle cx="310" cy="60" r="6" fill="#C4B5FD" />
+          <circle cx="200" cy="120" r="3" fill="#8B5CF6" />
+        </svg>
+      )}
       {/* label */}
       <div className="absolute bottom-4 left-4 flex items-center gap-2 md:bottom-6 md:left-6">
         <span className={`rounded-full border ${palette.ring} bg-black/40 px-3 py-1 text-[11px] uppercase tracking-[0.16em] backdrop-blur ${palette.text}`}>
@@ -85,7 +95,7 @@ export default function ProjectCover({
         </span>
       </div>
       <span className="absolute right-5 top-4 font-display text-5xl font-bold text-white/10 md:text-6xl" aria-hidden="true">
-        {project.slug === "port-said-hub" ? "01" : project.slug === "qena-services" ? "02" : "03"}
+        {project.slug === "port-said-hub" ? "01" : project.slug === "qena-services" ? "02" : project.slug === "genie-experiments" ? "03" : "04"}
       </span>
     </div>
   );

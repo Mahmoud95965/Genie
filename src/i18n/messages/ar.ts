@@ -9,7 +9,9 @@ export const arMessages: Messages = {
     description:
       "جيني استوديو مشاريع رقمية مستقل، يركّز على تخيّل وبناء وتنمية المنتجات والمنصات والمشاريع الرقمية.",
     workDescription:
-      "مشاريع جيني — Port Said Hub ومنصة خدمات قنا وتجارب Genie. مشاريع حقيقية، موسومة بصدق.",
+      "مشاريع جيني — Port Said Hub ومنصة خدمات قنا وتجارب Genie ونموذج Genie. مشاريع حقيقية، موسومة بصدق.",
+    modelDescription:
+      "تحدث مع نموذج Genie — نموذج ذكاء اصطناعي من Genie، جرّبه مجاناً بحد يومي، مدعوم بموديلات OpenRouter المجانية.",
     aboutDescription:
       "جيني استوديو مشاريع رقمية مستقل. رؤيتنا ورسالتنا وفلسفتنا — والأشياء الخمسة التي نفعلها.",
     contactDescription:
@@ -18,6 +20,7 @@ export const arMessages: Messages = {
   nav: {
     home: "الرئيسية",
     work: "المشاريع",
+    model: "النموذج",
     about: "من نحن",
     contact: "تواصل",
     letsTalk: "لنتحدث",
@@ -98,6 +101,10 @@ export const arMessages: Messages = {
     ],
     futureClosing:
       "نحن هنا لنواصل البناء والاستكشاف وتحويل الأفكار إلى واقع.",
+    modelCtaHeading: "تعرّف على نموذج Genie.",
+    modelCtaText:
+      "نموذج الذكاء الاصطناعي الخاص بنا — جرّبه مجاناً، 10 رسائل يومياً، مدعوم بموديلات OpenRouter المجانية.",
+    modelCtaButton: "تحدث مع نموذج Genie",
   },
   capabilities: [
     {
@@ -126,6 +133,51 @@ export const arMessages: Messages = {
     heading: "مشاريع موجودة فعلاً.",
     intro:
       "تطوّر جيني وتستكشف مشاريع رقمية في مجالات مختلفة، كل مشروع مبني حول هدفه وجمهوره ورؤيته الخاصة. مشاريعنا لا تقتصر على مجال واحد، وكل مشروع فرصة لاستكشاف مشكلة وصناعة حل وبناء شيء ذي معنى.",
+  },
+  model: {
+    title: "نموذج Genie",
+    eyebrow: "نموذج Genie",
+    heading: "تحدث مع نموذج Genie.",
+    intro:
+      "نموذج ذكاء اصطناعي من Genie، جرّبه مجاناً بحد يومي، مدعوم بموديلات OpenRouter المجانية. أي تطبيق يمكنه الاتصال به عبر واجهة OpenRouter البرمجية.",
+    limitNote: "مجاني — 10 رسائل يومياً.",
+    remaining: "تبقى {n} رسائل اليوم",
+    placeholder: "اسأل نموذج Genie أي شيء…",
+    send: "إرسال",
+    typing: "نموذج Genie يفكر…",
+    empty: "ابدأ المحادثة — اسأل عن Genie أو مشاريعنا أو أي شيء آخر.",
+    suggestions: [
+      "ما هو Genie؟",
+      "أخبرني عن Port Said Hub",
+      "ماذا يستطيع نموذج Genie أن يفعل؟",
+    ],
+    keyTitle: "استخدم مفتاح OpenRouter الخاص بك",
+    keyNote:
+      "لم يتم ضبط أي مفتاح على الخادم بعد، فأضف مفتاح OpenRouter المجاني الخاص بك للدردشة. يبقى المفتاح في متصفحك (التخزين المحلي) ولا يُرسل إلا إلى /api/chat الخاص بنا، الذي يمرره إلى OpenRouter.",
+    keyLabel: "مفتاح OpenRouter الخاص بك",
+    keyPlaceholder: "sk-or-v1-…",
+    keySave: "حفظ المفتاح",
+    keySaved: "تم حفظ المفتاح في هذا المتصفح.",
+    keyClear: "إزالة المفتاح",
+    keyHas: "مفتاحك محفوظ في هذا المتصفح.",
+    errors: {
+      empty: "من فضلك اكتب رسالة أولاً.",
+      noKey: "لم يتم ضبط أي مفتاح. أضف مفتاح OpenRouter المجاني الخاص بك أدناه للدردشة.",
+      invalidKey: "تم رفض مفتاح OpenRouter هذا. تحقق من المفتاح وحاول مرة أخرى.",
+      rateLimited:
+        "وصلت إلى الحد المجاني وهو 10 رسائل لهذا اليوم. عُد غداً — أو أضف مفتاحك الخاص للمتابعة.",
+      busy: "الموديلات المجانية مشغولة الآن. من فضلك حاول بعد قليل.",
+      generic: "حدث خطأ ما. من فضلك حاول مرة أخرى.",
+    },
+    connectHeading: "كيف تتصل",
+    connectIntro:
+      "أي تطبيق يمكنه استدعاء نموذج Genie عبر واجهة OpenRouter البرمجية — نفس الموديلات المجانية، ونفس نقطة النهاية.",
+    connectEndpointLabel: "نقطة النهاية",
+    connectModelsLabel: "الموديلات المجانية",
+    connectDocs: "وثائق OpenRouter",
+    connectExample: "مثال على طلب",
+    tryIt: "جرّب نموذج Genie",
+    tryText: "تحدث مع النموذج مجاناً — 10 رسائل يومياً، وبدون حساب.",
   },
   project: {
     back: "كل الأعمال",

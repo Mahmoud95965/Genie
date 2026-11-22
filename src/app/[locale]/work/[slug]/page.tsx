@@ -146,6 +146,27 @@ export default function ProjectPage({ params }: { params: { locale: string; slug
         </aside>
       </div>
 
+      {/* Genie Model — link from its project page to the live chat */}
+      {project.slug === "genie-model" && (
+        <Reveal className="mt-14">
+          <div className="rounded-2xl border border-sky/30 bg-sky/5 p-7 md:p-8">
+            <p className="display font-display text-2xl font-bold text-white md:text-3xl">
+              {t.model.tryIt}
+            </p>
+            <p className="mt-3 max-w-xl leading-relaxed text-zinc-400">
+              {t.model.tryText}
+            </p>
+            <Link
+              href={localizedPath(locale, "/model")}
+              className="group mt-6 inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-medium text-black transition-colors hover:bg-sky"
+            >
+              {t.model.tryIt}
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1 rtl:-scale-x-100 rtl:group-hover:-translate-x-1" aria-hidden="true" />
+            </Link>
+          </div>
+        </Reveal>
+      )}
+
       <section className="mt-20 border-t hairline pt-12" aria-labelledby="more-heading">
         <h2 id="more-heading" className="display font-display text-2xl font-bold text-white md:text-3xl">{t.project.moreWork}</h2>
         <div className="mt-8 grid gap-6 md:grid-cols-2">

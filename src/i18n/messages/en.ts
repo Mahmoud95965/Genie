@@ -7,7 +7,9 @@ export const enMessages = {
     description:
       "Genie is an independent digital venture studio focused on imagining, building, and growing digital products, platforms, and ventures.",
     workDescription:
-      "Our ventures from Genie — Port Said Hub, Qena Services Platform, and Genie Experiments. Real projects, honestly labelled.",
+      "Our ventures from Genie — Port Said Hub, Qena Services Platform, Genie Experiments, and Genie Model. Real projects, honestly labelled.",
+    modelDescription:
+      "Chat with Genie Model — an AI model by Genie, free to try with a daily limit, powered by OpenRouter free models.",
     aboutDescription:
       "Genie is an independent digital venture studio. Our vision, mission, and philosophy — and the five things we do.",
     contactDescription:
@@ -16,6 +18,7 @@ export const enMessages = {
   nav: {
     home: "Home",
     work: "Ventures",
+    model: "Model",
     about: "About",
     contact: "Contact",
     letsTalk: "Let’s Talk",
@@ -96,6 +99,10 @@ export const enMessages = {
     ],
     futureClosing:
       "We are here to keep building, exploring, and making ideas real.",
+    modelCtaHeading: "Meet Genie Model.",
+    modelCtaText:
+      "Our AI model — free to try, 10 messages a day, powered by OpenRouter free models.",
+    modelCtaButton: "Chat with Genie Model",
   },
   capabilities: [
     {
@@ -124,6 +131,51 @@ export const enMessages = {
     heading: "Ventures that exist.",
     intro:
       "Genie develops and explores digital ventures across different fields, each built around its own purpose, audience, and vision. Our ventures are not limited to one industry. Each project represents an opportunity to explore a problem, create a solution, and build something meaningful.",
+  },
+  model: {
+    title: "Genie Model",
+    eyebrow: "Genie Model",
+    heading: "Talk to Genie Model.",
+    intro:
+      "An AI model by Genie, free to try with limits, powered by OpenRouter free models. Any app can connect to it through the OpenRouter API.",
+    limitNote: "Free — 10 messages per day.",
+    remaining: "{n} messages left today",
+    placeholder: "Ask Genie Model anything…",
+    send: "Send",
+    typing: "Genie Model is thinking…",
+    empty: "Start the conversation — ask about Genie, our ventures, or anything else.",
+    suggestions: [
+      "What is Genie?",
+      "Tell me about Port Said Hub",
+      "What can Genie Model do?",
+    ],
+    keyTitle: "Use your own OpenRouter key",
+    keyNote:
+      "No key is configured on the server yet, so add your own free OpenRouter key to chat. It stays in your browser (local storage) and is sent only to our own /api/chat, which forwards it to OpenRouter.",
+    keyLabel: "Your OpenRouter API key",
+    keyPlaceholder: "sk-or-v1-…",
+    keySave: "Save key",
+    keySaved: "Key saved in this browser.",
+    keyClear: "Remove key",
+    keyHas: "Your key is saved in this browser.",
+    errors: {
+      empty: "Please write a message first.",
+      noKey: "No key is configured. Add your own free OpenRouter key below to chat.",
+      invalidKey: "That OpenRouter key was rejected. Check the key and try again.",
+      rateLimited:
+        "You’ve reached the free limit of 10 messages for today. Come back tomorrow — or add your own key to keep going.",
+      busy: "The free models are busy right now. Please try again shortly.",
+      generic: "Something went wrong. Please try again.",
+    },
+    connectHeading: "How to connect",
+    connectIntro:
+      "Any app can call Genie Model through the OpenRouter API — the same free models, the same endpoint.",
+    connectEndpointLabel: "Endpoint",
+    connectModelsLabel: "Free models",
+    connectDocs: "OpenRouter docs",
+    connectExample: "Example request",
+    tryIt: "Try Genie Model",
+    tryText: "Chat with the model for free — 10 messages per day, no account needed.",
   },
   project: {
     back: "All work",
