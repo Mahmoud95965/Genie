@@ -15,6 +15,9 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+# story-world runner: story files, answer keys, review artifacts,
+# store snapshots and findings never enter the (public) repo
+storyworld/local/
 # vercel
 .vercel
 # typescript
