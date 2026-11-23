@@ -9,6 +9,7 @@ export interface LocalizedProject {
   category: string;
   status: string;
   accent: Project["accent"];
+  cover?: string;
   stack: string[];
   links: { label: string; href: string }[];
   challenge: string;
@@ -39,6 +40,7 @@ export function localizeProject(project: Project, locale: Locale, t: Messages["p
     category: project.categoryAr,
     status: statusLabel(project.status, t),
     accent: project.accent,
+    cover: project.cover,
     stack: project.stack,
     links: project.links.map((l) => ({ label: l.labelAr ?? l.label, href: l.href })),
     challenge: project.challengeAr,
