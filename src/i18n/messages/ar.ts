@@ -9,7 +9,7 @@ export const arMessages: Messages = {
     description:
       "جيني استوديو مشاريع رقمية مستقل، يركّز على تخيّل وبناء وتنمية المنتجات والمنصات والمشاريع الرقمية.",
     workDescription:
-      "مشاريع جيني — Port Said Hub ومحرك اتساق عالم القصة. مشاريع حقيقية، موسومة بصدق.",
+      "مشاريع جيني — Port Said Hub. مشاريع حقيقية، موسومة بصدق.",
     aboutDescription:
       "جيني استوديو مشاريع رقمية مستقل. رؤيتنا ورسالتنا وفلسفتنا — والأشياء الخمسة التي نفعلها.",
     contactDescription:
@@ -18,6 +18,7 @@ export const arMessages: Messages = {
   nav: {
     home: "الرئيسية",
     work: "المشاريع",
+    planner: "لحّقها (تجربة)",
     about: "من نحن",
     contact: "تواصل",
     letsTalk: "لنتحدث",

@@ -36,6 +36,7 @@ export default function Navbar({ locale, t }: { locale: Locale; t: Messages }) {
   const navItems = [
     { label: t.nav.home, href: localizedPath(locale, "/") },
     { label: t.nav.work, href: localizedPath(locale, "/work") },
+    { label: t.nav.planner, href: localizedPath(locale, "/planner") },
     { label: t.nav.about, href: localizedPath(locale, "/about") },
   ];
   const contactHref = localizedPath(locale, "/contact");
