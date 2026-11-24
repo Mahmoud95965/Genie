@@ -3,7 +3,7 @@
  *
  * Spec section 5. Rules enforced here, in code:
  * - Request allowlist: only `model`, `messages`, `response_format`,
- *   `max_tokens`, `temperature`, `seed`, `provider`. No `tools`, no
+ *   `max_tokens`, `temperature`, `seed`, `provider`, `reasoning_effort`. No `tools`, no
  *   `plugins`, no `web`, no `models`/`route` fallback.
  * - Structured output via `response_format` (json_schema, strict).
  * - Telemetry records models, tokens, cost, latency and hashes ONLY —
@@ -168,6 +168,8 @@ export interface ChatCompletionRequest {
   messages: ChatMessage[];
   responseFormat?: JsonSchemaFormat | null;
   maxTokens?: number;
+  /** Sent as `reasoning_effort` (Gemini OpenAI-compatible); reasoning tokens count against max_tokens there. */
+  reasoningEffort?: string;
   temperature?: number;
   seed?: number;
   /** Provider routing lock, used only for measured/spend-bounded runs. */
@@ -187,6 +189,8 @@ export interface ChatCompletionResult {
   promptTokens: number | null;
   completionTokens: number | null;
   costUsd: number | null;
+  /** choices[0].finish_reason; "length" means the output cap truncated the response. */
+  finishReason: string | null;
   latencyMs: number;
   source: "fixture" | "live";
   telemetry: CallLogEntry;
@@ -199,6 +203,10 @@ export interface OpenRouterClientOptions {
   fetchImpl?: typeof fetch;
   /** Override for the fixtures directory (tests may point elsewhere). */
   fixturesDir?: string;
+  /** Env var holding the API key (default OPENROUTER_API_KEY; e.g. GEMINI_API_KEY for Gemini). */
+  apiKeyEnvVar?: string;
+  /** Skip the OpenRouter-only GET /generation cost lookup (providers without it). */
+  skipGenerationCost?: boolean;
 }
 
 interface RecordingFile {
@@ -213,12 +221,18 @@ export class OpenRouterClient {
   private readonly telemetry: TelemetryLog;
   private readonly fetchImpl: typeof fetch;
   private readonly fixturesDir: string;
+  /** Env var holding the API key; OPENROUTER_API_KEY for OpenRouter, provider-specific otherwise. */
+  private readonly apiKeyEnvVar: string;
+  /** Skip the OpenRouter-only GET /generation post-call cost lookup (other providers lack it). */
+  private readonly skipGenerationCost: boolean;
 
   constructor(options: OpenRouterClientOptions = {}) {
     this.config = options.config ?? loadConfig();
     this.telemetry = options.telemetry ?? new TelemetryLog();
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.fixturesDir = options.fixturesDir ?? join(repoRoot(), "storyworld", "fixtures", "llm-recordings");
+    this.apiKeyEnvVar = options.apiKeyEnvVar ?? "OPENROUTER_API_KEY";
+    this.skipGenerationCost = options.skipGenerationCost ?? false;
   }
 
   getTelemetry(): TelemetryLog {
@@ -274,6 +288,7 @@ export class OpenRouterClient {
             promptTokens: 0,
             completionTokens: 0,
             costUsd: null,
+            finishReason: null,
             latencyMs,
             source: "fixture",
             telemetry,
@@ -333,6 +348,7 @@ export class OpenRouterClient {
       };
     }
     if (request.maxTokens !== undefined) body.max_tokens = request.maxTokens;
+    if (request.reasoningEffort !== undefined) body.reasoning_effort = request.reasoningEffort;
     if (request.temperature !== undefined) body.temperature = request.temperature;
     if (request.seed !== undefined) body.seed = request.seed;
     if (request.provider !== undefined) body.provider = request.provider;
@@ -352,7 +368,7 @@ export class OpenRouterClient {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY ?? ""}`,
+              Authorization: `Bearer ${process.env[this.apiKeyEnvVar] ?? ""}`,
             },
             body: JSON.stringify(body),
             signal: controller.signal,
@@ -369,7 +385,7 @@ export class OpenRouterClient {
         const data = (await response.json()) as {
           model?: string;
           id?: string;
-          choices?: Array<{ message?: { content?: string } }>;
+          choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
           usage?: { prompt_tokens?: number; completion_tokens?: number };
         };
         const content = data.choices?.[0]?.message?.content ?? "";
@@ -404,6 +420,7 @@ export class OpenRouterClient {
           promptTokens,
           completionTokens,
           costUsd,
+          finishReason: data.choices?.[0]?.finish_reason ?? null,
           latencyMs,
           source: "live",
           telemetry,
@@ -435,11 +452,12 @@ export class OpenRouterClient {
 
   /** Best-effort cost lookup; missing cost is stored as null, never guessed. */
   private async fetchGenerationCost(generationId: string | undefined): Promise<number | null> {
+    if (this.skipGenerationCost) return null;
     if (!generationId) return null;
     try {
       const response = await this.fetchImpl(
         `${this.config.openrouter.baseUrl}/generation?id=${encodeURIComponent(generationId)}`,
-        { headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY ?? ""}` } },
+        { headers: { Authorization: `Bearer ${process.env[this.apiKeyEnvVar] ?? ""}` } },
       );
       if (!response.ok) return null;
       const data = (await response.json()) as { data?: { total_cost?: number } };

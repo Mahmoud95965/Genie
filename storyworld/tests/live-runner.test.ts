@@ -40,9 +40,11 @@ import {
   parseDecisionsFile,
   parseExtractionArgs,
   parseReviewBatchArtifact,
+  costFromUsage,
   runExtraction,
   runMockExtraction,
   runPricePreflight,
+  runStaticPricePreflight,
   runReviewAccept,
   sentenceSpans,
   writeReviewBatchArtifact,
@@ -94,6 +96,27 @@ function liveConfig(overrides: Record<string, unknown> = {}): StoryworldConfig {
   });
 }
 
+const GEMINI_SLUG = "gemini-3.6-flash";
+
+function geminiConfig(prices: { prompt: number; completion: number } = { prompt: 0, completion: 0 }): StoryworldConfig {
+  return mergeConfig({
+    models: { extractor: GEMINI_SLUG },
+    openrouter: { baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai" },
+    live_calls: {
+      enabled: true,
+      hard_cap_usd_per_month: 0,
+      approved_models: [
+        {
+          slug: GEMINI_SLUG,
+          api: "gemini",
+          static_prices: prices,
+          prices_source: "https://ai.google.dev/gemini-api/docs/pricing (free tier, checked 2026-11-23)",
+        },
+      ],
+    },
+  });
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -112,19 +135,24 @@ interface MockBehavior {
   chatHeaders?: Record<string, string>;
   /** When true, every chat dispatch throws (transport failure). */
   chatThrows?: boolean;
+  /** finish_reason on the chat response (default "stop"). */
+  chatFinishReason?: string;
   /** Cost returned by GET /generation; null/undefined → 404 (unknown). */
   generationCost?: number | null;
 }
 
 interface MockFetch {
   fetch: typeof fetch;
-  calls: Array<{ url: string; method: string; body?: unknown }>;
+  calls: Array<{ url: string; method: string; body?: unknown; headers?: unknown }>;
 }
 
 function mockFetch(behavior: MockBehavior = {}): MockFetch {
   const calls: MockFetch["calls"] = [];
   let chatIndex = 0;
-  const fetchImpl = (async (input: unknown, init?: { method?: string; body?: string }) => {
+  const fetchImpl = (async (
+    input: unknown,
+    init?: { method?: string; body?: string; headers?: unknown },
+  ) => {
     const url = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
     let body: unknown;
@@ -135,7 +163,7 @@ function mockFetch(behavior: MockBehavior = {}): MockFetch {
         body = init.body;
       }
     }
-    calls.push({ url, method, body });
+    calls.push({ url, method, body, headers: init?.headers });
     if (url.includes("/models")) {
       if (behavior.catalogSlugMissing) return jsonResponse({ data: [] });
       const pricing =
@@ -166,7 +194,12 @@ function mockFetch(behavior: MockBehavior = {}): MockFetch {
       return jsonResponse({
         id: "gen-test-1",
         model: SLUG,
-        choices: [{ message: { content: JSON.stringify(output) } }],
+        choices: [
+          {
+            message: { content: JSON.stringify(output) },
+            finish_reason: behavior.chatFinishReason ?? "stop",
+          },
+        ],
         usage: { prompt_tokens: 10, completion_tokens: 20 },
       });
     }
@@ -200,6 +233,7 @@ function fakeExtracted(output: Record<string, unknown>, body: string): Extracted
     promptTokens: null,
     completionTokens: null,
     costUsd: null,
+    costUsdSource: null,
     latencyMs: 0,
     dispatchCounts: { chatCompletions: 0, catalogFetches: 0, costLookups: 0, other: 0 },
     verification: verifyExtraction(body, output),
@@ -300,7 +334,14 @@ describe("1. live gate", () => {
 
   it("passes when every prerequisite is present and returns slug + provider", () => {
     const result = assertLivePrerequisites(liveConfig(), { OPENROUTER_API_KEY: "key" });
-    expect(result).toEqual({ slug: SLUG, provider: PROVIDER });
+    expect(result).toEqual({
+      slug: SLUG,
+      provider: PROVIDER,
+      api: "openrouter",
+      apiKeyEnvVar: "OPENROUTER_API_KEY",
+      staticPrices: null,
+      pricesSource: null,
+    });
   });
 });
 
@@ -1368,5 +1409,243 @@ describe("12. regression guard", () => {
     // This file adds tests only; the green `npm test` run (114 existing
     // + the new groups in this file) is the regression proof.
     expect(true).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 13 — Gemini adapter (offline): provider-aware gate, static prices,
+// key env var, usage-based cost. No network: every fetch is mocked.
+// ---------------------------------------------------------------------------
+describe("13. gemini adapter (offline)", () => {
+  it("gate returns the gemini shape: null provider, env var, sourced static prices", () => {
+    const prereq = assertLivePrerequisites(geminiConfig(), { GEMINI_API_KEY: "test-key" });
+    expect(prereq.api).toBe("gemini");
+    expect(prereq.provider).toBeNull();
+    expect(prereq.apiKeyEnvVar).toBe("GEMINI_API_KEY");
+    expect(prereq.staticPrices).toEqual({ prompt: 0, completion: 0 });
+    expect(prereq.pricesSource).toContain("ai.google.dev");
+  });
+
+  it("gate fails closed without the key env var", () => {
+    expect(() => assertLivePrerequisites(geminiConfig(), {})).toThrowError(/GEMINI_API_KEY/);
+  });
+
+  it("gate fails closed without static prices or their source", () => {
+    const noPrices = geminiConfig();
+    (noPrices.live_calls.approved_models as Array<Record<string, unknown>>)[0].static_prices = undefined;
+    expect(() => assertLivePrerequisites(noPrices, { GEMINI_API_KEY: "k" })).toThrowError(
+      /PRICE_PREFLIGHT_FAILED/,
+    );
+    const noSource = geminiConfig();
+    (noSource.live_calls.approved_models as Array<Record<string, unknown>>)[0].prices_source = "";
+    expect(() => assertLivePrerequisites(noSource, { GEMINI_API_KEY: "k" })).toThrowError(
+      /PRICE_PREFLIGHT_FAILED/,
+    );
+    const badPrice = geminiConfig({ prompt: -1, completion: 0 });
+    expect(() => assertLivePrerequisites(badPrice, { GEMINI_API_KEY: "k" })).toThrowError(
+      /PRICE_PREFLIGHT_FAILED/,
+    );
+  });
+
+  it("an unknown api value fails closed; a missing api defaults to openrouter", () => {
+    const bad = geminiConfig();
+    (bad.live_calls.approved_models as Array<Record<string, unknown>>)[0].api = "acme-ai";
+    expect(() => assertLivePrerequisites(bad, { GEMINI_API_KEY: "k" })).toThrowError(
+      /LIVE_GATE_MISSING/,
+    );
+    const openrouter = assertLivePrerequisites(liveConfig(), { OPENROUTER_API_KEY: "k" });
+    expect(openrouter.api).toBe("openrouter");
+    expect(openrouter.provider).toBe(PROVIDER);
+    expect(openrouter.staticPrices).toBeNull();
+  });
+
+  it("static pre-flight math (pure helper): worst case = 3 dispatches x (input + output bounds)", () => {
+    // The helper is pure arithmetic; the free-only zero-price refusal lives
+    // in the gate and in runExtraction (tested separately).
+    const { worstCaseUsd } = runStaticPricePreflight({
+      staticPrices: { prompt: 1.25e-6, completion: 4.25e-6 },
+      maxInputTokensPerDispatch: 1000,
+      maxOutputTokensPerDispatch: 500,
+    });
+    const expected = 3 * (1000 * 1.25e-6 + 500 * 4.25e-6);
+    expect(worstCaseUsd).toBeCloseTo(expected, 12);
+  });
+
+  it("costFromUsage: exact arithmetic, null when usage unknown", () => {
+    expect(costFromUsage({ prompt: 1e-6, completion: 2e-6 }, 10, 20)).toBeCloseTo(5e-5, 12);
+    expect(costFromUsage({ prompt: 1e-6, completion: 2e-6 }, null, 20)).toBeNull();
+    expect(costFromUsage({ prompt: 0, completion: 0 }, 10, 20)).toBe(0);
+  });
+
+  it("end-to-end gemini run: no catalog call, no generation call, no provider pin, key env var used", async () => {
+    process.env.GEMINI_API_KEY = "gemini-test-key";
+    try {
+      const { counting, mock } = countingMock({});
+      const extracted = await runExtraction(
+        { countingFetch: counting, config: geminiConfig(), attemptLedger: testAttemptLedger() },
+        {
+          chapterBody: CH2,
+          chapterSeq: 1,
+          model: GEMINI_SLUG,
+          provider: null,
+          api: "gemini",
+          apiKeyEnvVar: "GEMINI_API_KEY",
+          staticPrices: { prompt: 0, completion: 0 },
+        },
+      );
+      expect(extracted.mode).toBe("live");
+      expect(extracted.costUsd).toBe(0);
+      // No OpenRouter catalog pre-flight, no /generation cost lookup.
+      expect(catalogCalls(mock).length).toBe(0);
+      expect(mock.calls.filter((c) => c.url.includes("/generation")).length).toBe(0);
+      expect(chatCalls(mock).length).toBe(1);
+      // No provider routing pin in the request body.
+      const body = chatCalls(mock)[0].body as Record<string, unknown>;
+      expect(body.provider).toBeUndefined();
+      // The provider-specific env var supplied the bearer token.
+      const headers = chatCalls(mock)[0].headers as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer gemini-test-key");
+      // Cost is a usage-derived estimate under configured zero prices, never
+      // provider-confirmed on the Gemini path; worst case is surfaced (zero).
+      expect(extracted.costUsdSource).toBe("usage_estimate");
+      expect(extracted.worstCaseUsd).toBe(0);
+    } finally {
+      delete process.env.GEMINI_API_KEY;
+    }
+  });
+
+  it("free-only: the gate refuses nonzero static prices before any network", () => {
+    const paid = geminiConfig({ prompt: 1e-6, completion: 2e-6 });
+    expect(() => assertLivePrerequisites(paid, { GEMINI_API_KEY: "k" })).toThrowError(
+      /PAID_PATH_UNAUTHORIZED/,
+    );
+  });
+
+  it("free-only: runExtraction refuses nonzero static prices before any dispatch", async () => {
+    const { counting, mock } = countingMock({});
+    await expect(
+      runExtraction(
+        { countingFetch: counting, config: geminiConfig(), attemptLedger: testAttemptLedger() },
+        {
+          chapterBody: CH2,
+          chapterSeq: 1,
+          model: GEMINI_SLUG,
+          provider: null,
+          api: "gemini",
+          apiKeyEnvVar: "GEMINI_API_KEY",
+          staticPrices: { prompt: 1e-6, completion: 2e-6 },
+        },
+      ),
+    ).rejects.toMatchObject({ code: "PAID_PATH_UNAUTHORIZED" });
+    expect(chatCalls(mock).length).toBe(0);
+  });
+
+  it("gemini request body carries the proven parameters: max_tokens 4000, reasoning_effort low", async () => {
+    process.env.GEMINI_API_KEY = "gemini-test-key";
+    try {
+      const { counting, mock } = countingMock({});
+      await runExtraction(
+        { countingFetch: counting, config: geminiConfig(), attemptLedger: testAttemptLedger() },
+        {
+          chapterBody: CH2,
+          chapterSeq: 1,
+          model: GEMINI_SLUG,
+          provider: null,
+          api: "gemini",
+          apiKeyEnvVar: "GEMINI_API_KEY",
+          staticPrices: { prompt: 0, completion: 0 },
+        },
+      );
+      const body = chatCalls(mock)[0].body as Record<string, unknown>;
+      expect(body.max_tokens).toBe(4000);
+      expect(body.reasoning_effort).toBe("low");
+      expect(body.temperature).toBeUndefined();
+    } finally {
+      delete process.env.GEMINI_API_KEY;
+    }
+  });
+
+  it("an explicit in-cap max_tokens is honored; above the hard cap is refused before dispatch", async () => {
+    process.env.GEMINI_API_KEY = "gemini-test-key";
+    try {
+      const { counting, mock } = countingMock({});
+      await runExtraction(
+        { countingFetch: counting, config: geminiConfig(), attemptLedger: testAttemptLedger() },
+        {
+          chapterBody: CH2,
+          chapterSeq: 1,
+          model: GEMINI_SLUG,
+          provider: null,
+          api: "gemini",
+          apiKeyEnvVar: "GEMINI_API_KEY",
+          staticPrices: { prompt: 0, completion: 0 },
+          maxTokens: 6000,
+        },
+      );
+      expect((chatCalls(mock)[0].body as Record<string, unknown>).max_tokens).toBe(6000);
+
+      const over = countingMock({});
+      await expect(
+        runExtraction(
+          { countingFetch: over.counting, config: geminiConfig(), attemptLedger: testAttemptLedger() },
+          {
+            chapterBody: CH2,
+            chapterSeq: 1,
+            model: GEMINI_SLUG,
+            provider: null,
+            api: "gemini",
+            apiKeyEnvVar: "GEMINI_API_KEY",
+            staticPrices: { prompt: 0, completion: 0 },
+            maxTokens: 99999,
+          },
+        ),
+      ).rejects.toMatchObject({ code: "OUTPUT_CAP_EXCEEDED" });
+      expect(chatCalls(over.mock).length).toBe(0);
+    } finally {
+      delete process.env.GEMINI_API_KEY;
+    }
+  });
+
+  it("a finish_reason=length response is refused as truncated, not parsed or retried silently", async () => {
+    process.env.GEMINI_API_KEY = "gemini-test-key";
+    try {
+      const { counting, mock } = countingMock({ chatFinishReason: "length" });
+      await expect(
+        runExtraction(
+          { countingFetch: counting, config: geminiConfig(), attemptLedger: testAttemptLedger() },
+          {
+            chapterBody: CH2,
+            chapterSeq: 1,
+            model: GEMINI_SLUG,
+            provider: null,
+            api: "gemini",
+            apiKeyEnvVar: "GEMINI_API_KEY",
+            staticPrices: { prompt: 0, completion: 0 },
+          },
+        ),
+      ).rejects.toMatchObject({ code: "OUTPUT_TRUNCATED" });
+      expect(chatCalls(mock).length).toBe(1);
+    } finally {
+      delete process.env.GEMINI_API_KEY;
+    }
+  });
+
+  it("gemini run without static prices fails closed before any dispatch", async () => {
+    const { counting, mock } = countingMock({});
+    await expect(
+      runExtraction(
+        { countingFetch: counting, config: geminiConfig(), attemptLedger: testAttemptLedger() },
+        {
+          chapterBody: CH2,
+          chapterSeq: 1,
+          model: GEMINI_SLUG,
+          provider: null,
+          api: "gemini",
+          apiKeyEnvVar: "GEMINI_API_KEY",
+          staticPrices: null,
+        },
+      ),
+    ).rejects.toMatchObject({ code: "PRICE_PREFLIGHT_FAILED" });
+    expect(chatCalls(mock).length).toBe(0);
   });
 });

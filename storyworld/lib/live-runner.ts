@@ -86,7 +86,10 @@ export class LiveRunnerError extends Error {
     | "ATTEMPT_LOCKED"
     | "LEDGER_INVALID"
     | "ATTEMPT_MISMATCH"
-    | "ATTEMPT_ID_INVALID";
+    | "ATTEMPT_ID_INVALID"
+    | "PAID_PATH_UNAUTHORIZED"
+    | "OUTPUT_CAP_EXCEEDED"
+    | "OUTPUT_TRUNCATED";
   constructor(code: LiveRunnerError["code"], message: string) {
     super(`${code}: ${message}`);
     this.name = "LiveRunnerError";
@@ -110,6 +113,8 @@ export function storySha256(body: string): string {
 
 export interface LiveGateEnv {
   OPENROUTER_API_KEY?: string | undefined;
+  GEMINI_API_KEY?: string | undefined;
+  [key: string]: string | undefined;
 }
 
 /**
@@ -117,10 +122,32 @@ export interface LiveGateEnv {
  * approved extractor slug. Each missing piece is named in the error —
  * the gate fails closed and never guesses.
  */
+export interface StaticPrices {
+  /** USD per input token. */
+  prompt: number;
+  /** USD per output token (including reasoning/thought tokens). */
+  completion: number;
+}
+
 export interface LivePrerequisites {
   slug: string;
-  /** Pinned no-fallback provider from the approved entry (brief section 3c). */
-  provider: string;
+  /**
+   * Pinned no-fallback provider route (brief section 3c). Required for
+   * OpenRouter; null for providers that have no routing layer (Gemini).
+   */
+  provider: string | null;
+  /** Which API family serves the model. */
+  api: "openrouter" | "gemini";
+  /** Env var holding this provider's API key. */
+  apiKeyEnvVar: string;
+  /**
+   * Static per-token prices from the approved config entry, for providers
+   * without a live pricing catalog (Gemini). Null on the OpenRouter path,
+   * where the catalog pre-flight is the price gate.
+   */
+  staticPrices: StaticPrices | null;
+  /** Where the static prices came from (doc URL + retrieval date). Null for OpenRouter. */
+  pricesSource: string | null;
 }
 
 /**
@@ -160,6 +187,67 @@ export function assertLivePrerequisites(
       `live_calls.approved_models does not contain the extractor slug ${JSON.stringify(slug)}`,
     );
   }
+  const api = entry.api === undefined ? "openrouter" : entry.api;
+  if (api !== "openrouter" && api !== "gemini") {
+    throw new LiveRunnerError(
+      "LIVE_GATE_MISSING",
+      `live_calls.approved_models entry for ${JSON.stringify(slug)} has unknown api ${JSON.stringify(entry.api)} — ` +
+        'expected "openrouter" or "gemini"',
+    );
+  }
+
+  if (api === "gemini") {
+    // Gemini has no provider-routing pin and no live pricing catalog: the
+    // price gate is a static, sourced price table in the approved entry.
+    const apiKeyEnvVar =
+      typeof entry.apiKeyEnvVar === "string" && entry.apiKeyEnvVar.trim().length > 0
+        ? entry.apiKeyEnvVar
+        : "GEMINI_API_KEY";
+    const key = env[apiKeyEnvVar];
+    if (typeof key !== "string" || key.trim().length === 0) {
+      throw new LiveRunnerError(
+        "LIVE_GATE_MISSING",
+        `${apiKeyEnvVar} is not set in the environment (.env, git-ignored)`,
+      );
+    }
+    const sp = entry.static_prices as Record<string, unknown> | undefined;
+    const prompt = sp?.prompt;
+    const completion = sp?.completion;
+    if (
+      typeof prompt !== "number" || !Number.isFinite(prompt) || prompt < 0 ||
+      typeof completion !== "number" || !Number.isFinite(completion) || completion < 0
+    ) {
+      throw new LiveRunnerError(
+        "PRICE_PREFLIGHT_FAILED",
+        `approved entry for ${JSON.stringify(slug)} lacks static_prices {prompt, completion} ` +
+          "(finite numbers >= 0, USD per token) — fail closed on unknown pricing",
+      );
+    }
+    if (prompt !== 0 || completion !== 0) {
+      throw new LiveRunnerError(
+        "PAID_PATH_UNAUTHORIZED",
+        `approved entry for ${JSON.stringify(slug)} declares nonzero static_prices — ` +
+          "this adapter is restricted to free-tier Gemini models (exactly 0/0) on an account with no billing linked; " +
+          "a paid path needs a separately designed and authorized change",
+      );
+    }
+    if (typeof entry.prices_source !== "string" || entry.prices_source.trim().length === 0) {
+      throw new LiveRunnerError(
+        "PRICE_PREFLIGHT_FAILED",
+        `approved entry for ${JSON.stringify(slug)} lacks prices_source ` +
+          "(where the static prices were verified, with date) — fail closed on unsourced pricing",
+      );
+    }
+    return {
+      slug,
+      provider: null,
+      api: "gemini",
+      apiKeyEnvVar,
+      staticPrices: { prompt, completion },
+      pricesSource: entry.prices_source,
+    };
+  }
+
   if (typeof entry.provider !== "string" || entry.provider.trim().length === 0) {
     throw new LiveRunnerError(
       "LIVE_GATE_MISSING",
@@ -173,7 +261,42 @@ export function assertLivePrerequisites(
       "OPENROUTER_API_KEY is not set in the environment (.env, git-ignored)",
     );
   }
-  return { slug, provider: entry.provider };
+  return {
+    slug,
+    provider: entry.provider,
+    api: "openrouter",
+    apiKeyEnvVar: "OPENROUTER_API_KEY",
+    staticPrices: null,
+    pricesSource: null,
+  };
+}
+
+/**
+ * Static price pre-flight for providers without a live pricing catalog
+ * (Gemini). No network: the gate is the sourced static price table that
+ * assertLivePrerequisites already validated. Returns the worst-case cost
+ * of one full attempt budget (MAX_CHAT_DISPATCHES dispatches at the
+ * configured token bounds) so the operator sees the exposure up front.
+ */
+export function runStaticPricePreflight(args: {
+  staticPrices: StaticPrices;
+  maxInputTokensPerDispatch: number;
+  maxOutputTokensPerDispatch: number;
+}): { worstCaseUsd: number } {
+  const perDispatch =
+    args.maxInputTokensPerDispatch * args.staticPrices.prompt +
+    args.maxOutputTokensPerDispatch * args.staticPrices.completion;
+  return { worstCaseUsd: perDispatch * MAX_CHAT_DISPATCHES };
+}
+
+/** Local cost from the response usage and static prices; null when usage is unknown. */
+export function costFromUsage(
+  staticPrices: StaticPrices,
+  promptTokens: number | null,
+  completionTokens: number | null,
+): number | null {
+  if (promptTokens === null || completionTokens === null) return null;
+  return promptTokens * staticPrices.prompt + completionTokens * staticPrices.completion;
 }
 
 // ---------------------------------------------------------------------------
@@ -284,6 +407,16 @@ export async function runPricePreflight(
 
 /** Hard ceiling on chat-completion dispatches per run: 1 attempt + 2 runner retries. */
 export const MAX_CHAT_DISPATCHES = 3;
+
+/**
+ * Gemini free-only dispatch bounds. max_tokens 4000 with reasoning_effort
+ * "low" is the parameter set proven live on gemini-3.6-flash (2026-11-23):
+ * 500 truncated the JSON because reasoning tokens count against the cap.
+ * The hard ceiling bounds worst-case spend and the job token envelope.
+ */
+export const GEMINI_DEFAULT_MAX_TOKENS = 4000;
+export const GEMINI_MAX_OUTPUT_TOKENS = 8192;
+export const GEMINI_DEFAULT_REASONING_EFFORT = "low";
 
 export interface DispatchCounts {
   chatCompletions: number;
@@ -649,8 +782,18 @@ export interface RunExtractionArgs {
   /** Cast starts empty: extraction discovers the cast; never fabricated. */
   cast?: string[];
   model: string;
-  /** Pinned no-fallback provider from the approved entry (live only). */
+  /** Pinned no-fallback provider from the approved entry (live only; null for Gemini). */
   provider?: string | null;
+  /** API family from assertLivePrerequisites (default "openrouter"). */
+  api?: "openrouter" | "gemini";
+  /** Env var holding this provider's API key (default OPENROUTER_API_KEY). */
+  apiKeyEnvVar?: string;
+  /** Static sourced per-token prices for providers without a pricing catalog. */
+  staticPrices?: StaticPrices | null;
+  /** Per-dispatch output cap. Gemini: defaults to GEMINI_DEFAULT_MAX_TOKENS, hard-capped at GEMINI_MAX_OUTPUT_TOKENS. */
+  maxTokens?: number;
+  /** Gemini: reasoning effort (default GEMINI_DEFAULT_REASONING_EFFORT); reasoning tokens count against max_tokens. */
+  reasoningEffort?: string;
 }
 
 export interface ExtractedArtifact {
@@ -664,8 +807,26 @@ export interface ExtractedArtifact {
   provider: string | null;
   promptTokens: number | null;
   completionTokens: number | null;
-  /** Post-call cost flag from the client's generation lookup; null when unknown. */
+  /**
+   * Post-call cost in USD; null when unknown. NEVER provider-confirmed on the
+   * Gemini path: see costUsdSource. Free eligibility itself is not observable
+   * via the API — the guard is the enforced 0/0 static prices plus an account
+   * with no billing linked (a quota error, never a charge, ends a free run).
+   */
   costUsd: number | null;
+  /**
+   * Where costUsd came from: "provider_generation" = the provider's own
+   * post-call cost lookup (OpenRouter GET /generation); "usage_estimate" =
+   * computed locally as response usage x configured static prices (Gemini —
+   * an estimate under configured prices, NOT a provider-confirmed charge);
+   * null = cost unknown.
+   */
+  costUsdSource: "provider_generation" | "usage_estimate" | null;
+  /**
+   * Worst-case spend of the full dispatch budget under the static price
+   * table (Gemini path only; null otherwise). An upper bound, not an estimate.
+   */
+  worstCaseUsd?: number | null;
   latencyMs: number;
   dispatchCounts: DispatchCounts;
   verification: ReturnType<typeof verifyExtraction>;
@@ -707,6 +868,8 @@ export async function runExtraction(
     config: override,
     fetchImpl: deps.countingFetch.fetch,
     telemetry: new TelemetryLog(),
+    apiKeyEnvVar: args.apiKeyEnvVar,
+    skipGenerationCost: args.api === "gemini",
   });
   const budget = JobBudgetEnvelope.fromConfig(override);
   const baseUserMessage = buildExtractorUserMessage({
@@ -716,6 +879,53 @@ export async function runExtraction(
     cast: args.cast ?? [],
   });
 
+  // Gemini static price gate — once, before any dispatch. The worst case
+  // uses a hard token bound (1 token never covers less than 1 byte; Arabic
+  // is 2 bytes per UTF-16 unit) and the model's full output ceiling, since
+  // the runner does not cap max_tokens: an honest upper bound, not an estimate.
+  let worstCaseUsd: number | null = null;
+  let geminiMaxTokens: number | undefined;
+  if (args.api === "gemini") {
+    if (args.staticPrices === null || args.staticPrices === undefined) {
+      throw new LiveRunnerError(
+        "PRICE_PREFLIGHT_FAILED",
+        "gemini run without static prices — fail closed on unknown pricing",
+      );
+    }
+    // Free-only enforcement, repeated here so a caller that skipped the gate
+    // still cannot dispatch at declared nonzero prices.
+    if (args.staticPrices.prompt !== 0 || args.staticPrices.completion !== 0) {
+      throw new LiveRunnerError(
+        "PAID_PATH_UNAUTHORIZED",
+        "gemini dispatch refused: static_prices must be exactly 0/0 (free tier, no billing linked); " +
+          "a paid path needs a separately designed and authorized change",
+      );
+    }
+    // Enforced per-dispatch output cap: the proven value is the default, the
+    // hard ceiling keeps the worst case and the job token envelope bounded.
+    geminiMaxTokens = args.maxTokens ?? GEMINI_DEFAULT_MAX_TOKENS;
+    if (
+      !Number.isInteger(geminiMaxTokens) ||
+      geminiMaxTokens < 1 ||
+      geminiMaxTokens > GEMINI_MAX_OUTPUT_TOKENS
+    ) {
+      throw new LiveRunnerError(
+        "OUTPUT_CAP_EXCEEDED",
+        `gemini max_tokens must be an integer in 1..${GEMINI_MAX_OUTPUT_TOKENS} ` +
+          `(got ${args.maxTokens}); reasoning tokens count against it, ${GEMINI_DEFAULT_MAX_TOKENS} is the proven value`,
+      );
+    }
+    const maxInputTokens =
+      (EXTRACTOR_SYSTEM_PROMPT.length +
+        baseUserMessage.length +
+        JSON.stringify(GENIE_EXTRACTOR_OUTPUT_SCHEMA).length) * 2;
+    worstCaseUsd = runStaticPricePreflight({
+      staticPrices: args.staticPrices,
+      maxInputTokensPerDispatch: maxInputTokens,
+      maxOutputTokensPerDispatch: geminiMaxTokens,
+    }).worstCaseUsd;
+  }
+
   let attempts = 0;
   let validationRetries = 0;
   let lastValidationErrors: ValidationIssue[] = [];
@@ -723,8 +933,12 @@ export async function runExtraction(
 
   while (attempts < MAX_CHAT_DISPATCHES) {
     attempts += 1;
-    // Price pre-flight before EVERY dispatch — fails closed.
-    await runPricePreflight(deps.countingFetch.fetch, override.openrouter.baseUrl, args.model);
+    // Price pre-flight before EVERY dispatch — fails closed. OpenRouter
+    // checks the live catalog per dispatch; the Gemini static gate runs
+    // once before the loop (its sourced prices cannot change mid-run).
+    if (args.api !== "gemini") {
+      await runPricePreflight(deps.countingFetch.fetch, override.openrouter.baseUrl, args.model);
+    }
     // Budget reservation BEFORE the network call: a crash after this line
     // still counts the dispatch as used (the ledger fails closed).
     const reservation = deps.attemptLedger.reserve();
@@ -745,6 +959,11 @@ export async function runExtraction(
           schema: GENIE_EXTRACTOR_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
         },
         purpose: "extract",
+        maxTokens: args.api === "gemini" ? geminiMaxTokens : args.maxTokens,
+        reasoningEffort:
+          args.api === "gemini"
+            ? (args.reasoningEffort ?? GEMINI_DEFAULT_REASONING_EFFORT)
+            : args.reasoningEffort,
         provider:
           args.provider !== null && args.provider !== undefined
             ? { order: [args.provider], allow_fallbacks: false }
@@ -801,6 +1020,17 @@ export async function runExtraction(
       continue;
     }
 
+    if (result.finishReason === "length") {
+      // The output cap was hit before the JSON completed (on Gemini,
+      // reasoning tokens count against it). Refuse loudly instead of
+      // surfacing a misleading schema-validation failure.
+      throw new LiveRunnerError(
+        "OUTPUT_TRUNCATED",
+        `model stopped at the max_tokens output cap before finishing the JSON (finish_reason=length). ` +
+          `Reasoning tokens count against the cap on Gemini; retry with a higher max_tokens ` +
+          `(up to ${GEMINI_MAX_OUTPUT_TOKENS}) or lower reasoning effort. The truncated output was not parsed.`,
+      );
+    }
     const validation = validateExtractorOutput(result.output);
     if (validation.valid) {
       if (typeof result.output !== "object" || result.output === null || Array.isArray(result.output)) {
@@ -816,10 +1046,21 @@ export async function runExtraction(
         provider: args.provider ?? null,
         promptTokens: result.promptTokens,
         completionTokens: result.completionTokens,
-        costUsd: result.costUsd,
+        costUsd:
+          result.costUsd ??
+          (args.staticPrices != null
+            ? costFromUsage(args.staticPrices, result.promptTokens, result.completionTokens)
+            : null),
+        costUsdSource:
+          result.costUsd != null
+            ? "provider_generation"
+            : args.staticPrices != null
+              ? "usage_estimate"
+              : null,
         latencyMs: result.latencyMs,
         dispatchCounts: { ...deps.countingFetch.counts },
         verification: verifyExtraction(body, result.output),
+        worstCaseUsd,
       };
     }
 
@@ -1058,6 +1299,7 @@ export function runMockExtraction(args: {
     promptTokens: null,
     completionTokens: null,
     costUsd: null,
+    costUsdSource: null,
     latencyMs: 0,
     dispatchCounts: { chatCompletions: 0, catalogFetches: 0, costLookups: 0, other: 0 },
     verification: verifyExtraction(body, output),
@@ -1099,6 +1341,7 @@ export interface ReviewBatchArtifact {
     promptTokens: number | null;
     completionTokens: number | null;
     costUsd: number | null;
+    costUsdSource: "provider_generation" | "usage_estimate" | null;
     latencyMs: number;
     dispatchCounts: DispatchCounts;
   };
@@ -1159,6 +1402,7 @@ export function buildReviewBatchArtifact(args: BuildArtifactArgs): {
       promptTokens: args.extracted.promptTokens,
       completionTokens: args.extracted.completionTokens,
       costUsd: args.extracted.costUsd,
+      costUsdSource: args.extracted.costUsdSource,
       latencyMs: args.extracted.latencyMs,
       dispatchCounts: args.extracted.dispatchCounts,
     },
@@ -1202,7 +1446,13 @@ export function renderReviewBatchMarkdown(artifact: ReviewBatchArtifact): string
     `- Tokens: prompt ${artifact.extractor.promptTokens ?? "—"}, completion ${artifact.extractor.completionTokens ?? "—"}`,
   );
   const cost = artifact.extractor.costUsd;
-  lines.push(`- Cost (USD): ${cost === null ? "NULL (unknown)" : cost}`);
+  const costLabel =
+    artifact.extractor.costUsdSource === "usage_estimate"
+      ? `${cost} (usage x configured static prices — NOT provider-confirmed)`
+      : artifact.extractor.costUsdSource === "provider_generation"
+        ? `${cost} (provider-reported)`
+        : "NULL (unknown)";
+  lines.push(`- Cost (USD): ${costLabel}`);
   if (cost !== null && cost !== 0) {
     lines.push(`- **UNEXPECTED CHARGE — cost is ${cost} USD, expected 0. Do not proceed without owner review.**`);
   }

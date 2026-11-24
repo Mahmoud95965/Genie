@@ -48,9 +48,11 @@ async function main(): Promise<void> {
   if (cli.mode === "mock") {
     extracted = runMockExtraction({ chapterBody: storyBody, chapterSeq: cli.chapterSeq });
   } else {
-    const { slug, provider } = assertLivePrerequisites(config, {
+    const prereq = assertLivePrerequisites(config, {
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+      GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     });
+    const { slug, provider } = prereq;
     const countingFetch = new CountingFetch(fetch);
     // D2: durable per-attempt dispatch budget. Acquired BEFORE any
     // network work and held until the run finishes; the lock is
@@ -71,6 +73,9 @@ async function main(): Promise<void> {
           cast: [],
           model: slug,
           provider,
+          api: prereq.api,
+          apiKeyEnvVar: prereq.apiKeyEnvVar,
+          staticPrices: prereq.staticPrices,
         },
       );
     } finally {

@@ -1,0 +1,265 @@
+{
+  "recording_id": "gemini-3.6-flash-smoke",
+  "purpose": "extract",
+  "model_requested": "google/gemini-3.6-flash",
+  "prompt_version": "extractor.v2",
+  "response": {
+    "propositions": [
+      {
+        "local_id": "prop_1",
+        "statement": "القط غير موجود في البيت.",
+        "evidence": [
+          {
+            "quote": "يا كريم، القط مش موجود",
+            "start_offset": 50,
+            "end_offset": 71
+          }
+        ]
+      },
+      {
+        "local_id": "prop_2",
+        "statement": "سامية رأت قطاً قريباً من النخلة وقت الفجر.",
+        "evidence": [
+          {
+            "quote": "شفت قط قريب من النخلة الفجر",
+            "start_offset": 127,
+            "end_offset": 155
+          }
+        ]
+      }
+    ],
+    "events": [
+      {
+        "local_id": "evt_1",
+        "kind": "dialogue",
+        "summary": "نادية تنادي كريم وتخبره بأن القط غير موجود.",
+        "participants": [
+          {
+            "character": "نادية",
+            "role": "speaker"
+          },
+          {
+            "character": "كريم",
+            "role": "listener"
+          }
+        ],
+        "location": "الدار",
+        "story_time": null,
+        "span_start": 0,
+        "span_end": 1,
+        "reality_scope": "real",
+        "certainty": "asserted",
+        "evidence": [
+          {
+            "quote": "استيقظ كريم على صوت أمه نادية تنادي: يا كريم، القط مش موجود.",
+            "start_offset": 23,
+            "end_offset": 80
+          }
+        ],
+        "knowledge_transfer": {
+          "proposition_local_id": "prop_1",
+          "from_character": "نادية",
+          "to_characters": [
+            "كريم"
+          ],
+          "how": "told"
+        },
+        "knowledge_use": null
+      },
+      {
+        "local_id": "evt_2",
+        "kind": "action",
+        "summary": "بحث كريم عن القط في الدار.",
+        "participants": [
+          {
+            "character": "كريم",
+            "role": "actor"
+          }
+        ],
+        "location": "الدار",
+        "story_time": null,
+        "span_start": 1,
+        "span_end": 2,
+        "reality_scope": "real",
+        "certainty": "asserted",
+        "evidence": [
+          {
+            "quote": "بحث كريم في الدار",
+            "start_offset": 81,
+            "end_offset": 98
+          }
+        ],
+        "knowledge_transfer": null,
+        "knowledge_use": null
+      },
+      {
+        "local_id": "evt_3",
+        "kind": "dialogue",
+        "summary": "سأل كريم سامية وقالت إنها رأت قطاً عند النخلة في الفجر.",
+        "participants": [
+          {
+            "character": "كريم",
+            "role": "speaker"
+          },
+          {
+            "character": "سامية",
+            "role": "speaker"
+          }
+        ],
+        "location": null,
+        "story_time": null,
+        "span_start": 2,
+        "span_end": 3,
+        "reality_scope": "real",
+        "certainty": "asserted",
+        "evidence": [
+          {
+            "quote": "وسأل جارته سامية. قالت سامية: شفت قط قريب من النخلة الفجر.",
+            "start_offset": 100,
+            "end_offset": 156
+          }
+        ],
+        "knowledge_transfer": {
+          "proposition_local_id": "prop_2",
+          "from_character": "سامية",
+          "to_characters": [
+            "كريم"
+          ],
+          "how": "told"
+        },
+        "knowledge_use": null
+      },
+      {
+        "local_id": "evt_4",
+        "kind": "movement",
+        "summary": "مشي كريم إلى النخلة ووجد قطه نائماً تحتها.",
+        "participants": [
+          {
+            "character": "كريم",
+            "role": "actor"
+          }
+        ],
+        "location": "النخلة",
+        "story_time": null,
+        "span_start": 3,
+        "span_end": 4,
+        "reality_scope": "real",
+        "certainty": "asserted",
+        "evidence": [
+          {
+            "quote": "مشي كريم للنخلة ولقى قطه نايم تحتها.",
+            "start_offset": 157,
+            "end_offset": 193
+          }
+        ],
+        "knowledge_transfer": null,
+        "knowledge_use": {
+          "character": "كريم",
+          "proposition_local_id": "prop_2"
+        }
+      },
+      {
+        "local_id": "evt_5",
+        "kind": "movement",
+        "summary": "حمل كريم قطه ورجع به إلى البيت وقالت نادية الحمد لله على سلامته.",
+        "participants": [
+          {
+            "character": "كريم",
+            "role": "actor"
+          },
+          {
+            "character": "نادية",
+            "role": "speaker"
+          }
+        ],
+        "location": "البيت",
+        "story_time": null,
+        "span_start": 4,
+        "span_end": 5,
+        "reality_scope": "real",
+        "certainty": "asserted",
+        "evidence": [
+          {
+            "quote": "حمله ورجع البيت، وقالت نادية: الحمد لله على سلامته.",
+            "start_offset": 194,
+            "end_offset": 245
+          }
+        ],
+        "knowledge_transfer": null,
+        "knowledge_use": null
+      }
+    ],
+    "knowledge": [
+      {
+        "character": "كريم",
+        "proposition_local_id": "prop_1",
+        "learned_how": "told",
+        "certainty": "asserted",
+        "learned_at_event_local_id": "evt_1",
+        "evidence": [
+          {
+            "quote": "يا كريم، القط مش موجود",
+            "start_offset": 50,
+            "end_offset": 71
+          }
+        ]
+      },
+      {
+        "character": "كريم",
+        "proposition_local_id": "prop_2",
+        "learned_how": "told",
+        "certainty": "asserted",
+        "learned_at_event_local_id": "evt_3",
+        "evidence": [
+          {
+            "quote": "قالت سامية: شفت قط قريب من النخلة الفجر",
+            "start_offset": 116,
+            "end_offset": 155
+          }
+        ]
+      }
+    ],
+    "character_facts": [
+      {
+        "character": "نادية",
+        "kind": "relationship",
+        "value": "أم كريم",
+        "valid_from_event_local_id": "evt_1",
+        "evidence": [
+          {
+            "quote": "أمه نادية",
+            "start_offset": 39,
+            "end_offset": 47
+          }
+        ]
+      },
+      {
+        "character": "سامية",
+        "kind": "relationship",
+        "value": "جارة كريم",
+        "valid_from_event_local_id": "evt_3",
+        "evidence": [
+          {
+            "quote": "جارته سامية",
+            "start_offset": 105,
+            "end_offset": 115
+          }
+        ]
+      },
+      {
+        "character": "كريم",
+        "kind": "location",
+        "value": "البيت",
+        "valid_from_event_local_id": "evt_5",
+        "evidence": [
+          {
+            "quote": "ورجع البيت",
+            "start_offset": 199,
+            "end_offset": 209
+          }
+        ]
+      }
+    ],
+    "promises": []
+  }
+}
