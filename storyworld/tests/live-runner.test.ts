@@ -25,9 +25,11 @@ import { GENIE_EXTRACTOR_OUTPUT_SCHEMA } from "../lib/extractor/schema";
 import { verifyExtraction } from "../lib/extractor/evidence";
 import { loadStoreSnapshotIfExists } from "../lib/store-snapshot";
 import {
+  AttemptLedger,
   CountingFetch,
   LiveRunnerError,
   MAX_CHAT_DISPATCHES,
+  RATE_LIMIT_DEFAULT_WAIT_MS,
   assertLivePrerequisites,
   assertPricingAllZero,
   buildMockExtractorOutput,
@@ -67,6 +69,17 @@ afterEach(() => {
   }
 });
 
+/** Fresh attempt ledger in a throwaway dir — one per runExtraction call in tests. */
+function testAttemptLedger(now?: () => Date): AttemptLedger {
+  return AttemptLedger.acquire({
+    dir: tempDir(),
+    attemptId: "test-attempt",
+    chapterSeq: 1,
+    storySha256: "test-sha",
+    now,
+  });
+}
+
 function liveConfig(overrides: Record<string, unknown> = {}): StoryworldConfig {
   return mergeConfig({
     models: { extractor: SLUG },
@@ -95,6 +108,8 @@ interface MockBehavior {
   chatBodies?: unknown[];
   /** When set, every chat dispatch returns this HTTP status instead. */
   chatStatus?: number;
+  /** Response headers on the chatStatus error response (e.g. retry-after). */
+  chatHeaders?: Record<string, string>;
   /** When true, every chat dispatch throws (transport failure). */
   chatThrows?: boolean;
   /** Cost returned by GET /generation; null/undefined → 404 (unknown). */
@@ -138,7 +153,10 @@ function mockFetch(behavior: MockBehavior = {}): MockFetch {
     if (url.includes("/chat/completions")) {
       if (behavior.chatThrows === true) throw new Error("mock network failure");
       if (behavior.chatStatus !== undefined && behavior.chatStatus !== 200) {
-        return new Response("provider error", { status: behavior.chatStatus });
+        return new Response("provider error", {
+          status: behavior.chatStatus,
+          headers: behavior.chatHeaders ?? {},
+        });
       }
       const output =
         behavior.chatBodies !== undefined
@@ -399,7 +417,7 @@ describe("4. dispatch ceiling", () => {
     const { counting, mock } = countingMock({ chatStatus: 500 });
     await expect(
       runExtraction(
-        { countingFetch: counting, config: liveConfig() },
+        { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
         { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
       ),
     ).rejects.toMatchObject({ code: "PROVIDER_ERROR" });
@@ -425,13 +443,364 @@ describe("4. dispatch ceiling", () => {
     const { counting } = countingMock({ chatStatus: 500 });
     await expect(
       runExtraction(
-        { countingFetch: counting, config: liveConfig() },
+        { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
         { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
       ),
     ).rejects.toBeInstanceOf(LiveRunnerError);
     expect(readFileSync(configPath, "utf-8")).toBe(before);
     const repoConfig = loadConfig();
     expect(repoConfig.openrouter.maxRetriesPerCall).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 4b — attempt ledger (D2): durable, crash-safe dispatch budget.
+// ---------------------------------------------------------------------------
+describe("4b. attempt ledger (D2)", () => {
+  it("reserves each dispatch BEFORE the network call and completes it in place", async () => {
+    const dir = tempDir();
+    const ledger = AttemptLedger.acquire({
+      dir, attemptId: "t-reserve", chapterSeq: 1, storySha256: "sha",
+    });
+    const { counting, mock } = countingMock({});
+    await runExtraction(
+      { countingFetch: counting, config: liveConfig(), attemptLedger: ledger },
+      { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
+    );
+    ledger.release();
+    expect(chatCalls(mock).length).toBe(1);
+    const onDisk = JSON.parse(readFileSync(join(dir, "attempt-t-reserve.json"), "utf-8")) as {
+      reservations: Array<{ n: number; status?: string }>;
+    };
+    expect(onDisk.reservations.length).toBe(1);
+    expect(onDisk.reservations[0].status).toBe("ok");
+    expect(existsSync(join(dir, "attempt-t-reserve.lock"))).toBe(false);
+  });
+
+  it("crash after reservation: lock refuses first; even after the lock is cleared the count is kept", async () => {
+    const dir = tempDir();
+    const ledger = AttemptLedger.acquire({
+      dir, attemptId: "t-crash", chapterSeq: 1, storySha256: "sha",
+    });
+    ledger.reserve(); // network call dies here: no complete(), no release()
+
+    // First expected result of a stale lock: refusal, never auto-removal.
+    expect(() =>
+      AttemptLedger.acquire({ dir, attemptId: "t-crash", chapterSeq: 1, storySha256: "sha" }),
+    ).toThrowError(/ATTEMPT_LOCKED/);
+
+    // Controlled recovery removes ONLY the lock file; the interrupted
+    // reservation is NOT discounted.
+    rmSync(join(dir, "attempt-t-crash.lock"));
+    const recovered = AttemptLedger.acquire({
+      dir, attemptId: "t-crash", chapterSeq: 1, storySha256: "sha",
+    });
+    expect(recovered.dispatchesUsed).toBe(1);
+    expect(recovered.reserve()).toBe(2); // the next dispatch is #2, not #1
+    recovered.release();
+  });
+
+  it("a concurrent acquire on the same attempt refuses (lock held)", () => {
+    const dir = tempDir();
+    const ledger = AttemptLedger.acquire({
+      dir, attemptId: "t-conc", chapterSeq: 1, storySha256: "sha",
+    });
+    expect(() =>
+      AttemptLedger.acquire({ dir, attemptId: "t-conc", chapterSeq: 1, storySha256: "sha" }),
+    ).toThrowError(/ATTEMPT_LOCKED/);
+    ledger.release();
+  });
+
+  it("corrupt ledger for an existing attempt fails closed with zero dispatches", async () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, "attempt-t-corrupt.json"), "{ not json !!", "utf-8");
+    expect(() =>
+      AttemptLedger.acquire({ dir, attemptId: "t-corrupt", chapterSeq: 1, storySha256: "sha" }),
+    ).toThrowError(/LEDGER_INVALID/);
+    // The lock it created on the way in is cleaned up, and nothing dispatched.
+    expect(existsSync(join(dir, "attempt-t-corrupt.lock"))).toBe(false);
+    const { counting, mock } = countingMock({});
+    expect(chatCalls(mock).length).toBe(0);
+    void counting;
+  });
+
+  it("chapter or story mismatch on an existing attempt refuses", () => {
+    const dir = tempDir();
+    const ledger = AttemptLedger.acquire({
+      dir, attemptId: "t-scope", chapterSeq: 1, storySha256: "sha-a",
+    });
+    ledger.release();
+    expect(() =>
+      AttemptLedger.acquire({ dir, attemptId: "t-scope", chapterSeq: 2, storySha256: "sha-a" }),
+    ).toThrowError(/ATTEMPT_MISMATCH/);
+    expect(() =>
+      AttemptLedger.acquire({ dir, attemptId: "t-scope", chapterSeq: 1, storySha256: "sha-b" }),
+    ).toThrowError(/ATTEMPT_MISMATCH/);
+  });
+
+  it("unsafe attempt ids refuse before any path use", () => {
+    const dir = tempDir();
+    for (const bad of ["../escape", "a/b", "a b", "a".repeat(65), "", "-lead", ".lead", "id;rm"]) {
+      expect(() =>
+        AttemptLedger.acquire({ dir, attemptId: bad, chapterSeq: 1, storySha256: "sha" }),
+      ).toThrowError(/ATTEMPT_ID_INVALID/);
+    }
+  });
+
+  it("429 with Retry-After: 1 dispatch, then stop; the not-before time is recorded in full", async () => {
+    const dir = tempDir();
+    const ledger = AttemptLedger.acquire({
+      dir, attemptId: "t-429", chapterSeq: 1, storySha256: "sha",
+    });
+    const before = Date.now();
+    const { counting, mock } = countingMock({ chatStatus: 429, chatHeaders: { "retry-after": "45" } });
+    await expect(
+      runExtraction(
+        { countingFetch: counting, config: liveConfig(), attemptLedger: ledger },
+        { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
+      ),
+    ).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    expect(chatCalls(mock).length).toBe(1);
+    const notBefore = new Date(ledger.retryNotBefore as string).getTime();
+    // Full server value honored: at least the 45s, never shortened.
+    expect(notBefore).toBeGreaterThanOrEqual(before + 45_000);
+    expect(notBefore).toBeLessThan(Date.now() + 46_000);
+    ledger.release();
+
+    // Re-invoking before the not-before time dispatches nothing.
+    const { counting: counting2, mock: mock2 } = countingMock({});
+    expect(() =>
+      AttemptLedger.acquire({ dir, attemptId: "t-429", chapterSeq: 1, storySha256: "sha" }),
+    ).toThrowError(/RATE_LIMITED/);
+    expect(chatCalls(mock2).length).toBe(0);
+    void counting2;
+  });
+
+  it("429 with a missing Retry-After header falls back to the default wait", async () => {
+    const dir = tempDir();
+    const ledger = AttemptLedger.acquire({
+      dir, attemptId: "t-429-default", chapterSeq: 1, storySha256: "sha",
+    });
+    const before = Date.now();
+    const { counting } = countingMock({ chatStatus: 429 });
+    await expect(
+      runExtraction(
+        { countingFetch: counting, config: liveConfig(), attemptLedger: ledger },
+        { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
+      ),
+    ).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    const notBefore = new Date(ledger.retryNotBefore as string).getTime();
+    expect(notBefore).toBeGreaterThanOrEqual(before + RATE_LIMIT_DEFAULT_WAIT_MS);
+    ledger.release();
+  });
+
+  it("a long server Retry-After is recorded in full, never shortened", async () => {
+    const dir = tempDir();
+    const ledger = AttemptLedger.acquire({
+      dir, attemptId: "t-429-long", chapterSeq: 1, storySha256: "sha",
+    });
+    const before = Date.now();
+    const { counting } = countingMock({ chatStatus: 429, chatHeaders: { "retry-after": "3600" } });
+    await expect(
+      runExtraction(
+        { countingFetch: counting, config: liveConfig(), attemptLedger: ledger },
+        { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
+      ),
+    ).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    const notBefore = new Date(ledger.retryNotBefore as string).getTime();
+    expect(notBefore).toBeGreaterThanOrEqual(before + 3_600_000);
+    ledger.release();
+  });
+
+  it("an elapsed not-before allows work again", () => {
+    const dir = tempDir();
+    const ledger = AttemptLedger.acquire({
+      dir, attemptId: "t-elapsed", chapterSeq: 1, storySha256: "sha",
+    });
+    ledger.reserve();
+    ledger.noteRateLimited(-1000); // already in the past
+    ledger.release();
+    const again = AttemptLedger.acquire({
+      dir, attemptId: "t-elapsed", chapterSeq: 1, storySha256: "sha",
+    });
+    expect(again.dispatchesUsed).toBe(1);
+    again.release();
+  });
+
+  it("the 3-dispatch cap is cumulative across invocations of one attempt", async () => {
+    const dir = tempDir();
+    const makeLedger = () =>
+      AttemptLedger.acquire({ dir, attemptId: "t-cap", chapterSeq: 1, storySha256: "sha" });
+
+    // Invocation 1: provider 500s, consumes all 3 dispatches.
+    const ledger1 = makeLedger();
+    const { counting, mock } = countingMock({ chatStatus: 500 });
+    await expect(
+      runExtraction(
+        { countingFetch: counting, config: liveConfig(), attemptLedger: ledger1 },
+        { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
+      ),
+    ).rejects.toMatchObject({ code: "PROVIDER_ERROR" });
+    ledger1.release();
+    expect(chatCalls(mock).length).toBe(3);
+
+    // Invocation 2 on the same attempt: BUDGET_EXHAUSTED, zero dispatches.
+    const ledger2 = makeLedger();
+    const { counting: counting2, mock: mock2 } = countingMock({});
+    await expect(
+      runExtraction(
+        { countingFetch: counting2, config: liveConfig(), attemptLedger: ledger2 },
+        { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
+      ),
+    ).rejects.toMatchObject({ code: "BUDGET_EXHAUSTED" });
+    ledger2.release();
+    expect(chatCalls(mock2).length).toBe(0);
+  });
+
+  it("a non-retryable 401 dispatches once, fails fast, and records no not-before", async () => {
+    const dir = tempDir();
+    const ledger = AttemptLedger.acquire({
+      dir, attemptId: "t-401", chapterSeq: 1, storySha256: "sha",
+    });
+    const { counting, mock } = countingMock({ chatStatus: 401 });
+    await expect(
+      runExtraction(
+        { countingFetch: counting, config: liveConfig(), attemptLedger: ledger },
+        { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
+      ),
+    ).rejects.toMatchObject({ code: "PROVIDER_ERROR" });
+    expect(chatCalls(mock).length).toBe(1);
+    expect(ledger.retryNotBefore).toBeNull();
+    ledger.release();
+  });
+
+  it("malformed-but-valid-JSON ledgers fail closed (every field is validated)", () => {
+    const validAt = new Date().toISOString();
+    const base = {
+      schemaVersion: 1,
+      attemptId: "t-malformed",
+      chapterSeq: 1,
+      storySha256: "sha",
+      reservations: [],
+      retryNotBefore: null,
+    };
+    const cases: Array<[string, unknown]> = [
+      ["garbage retryNotBefore", { ...base, retryNotBefore: "not-a-date" }],
+      ["non-string retryNotBefore", { ...base, retryNotBefore: 12345 }],
+      ["non-integer n", { ...base, reservations: [{ n: 1.5, reservedAt: validAt }] }],
+      ["sequence gap", { ...base, reservations: [{ n: 2, reservedAt: validAt }] }],
+      ["n not starting at 1", { ...base, reservations: [{ n: 0, reservedAt: validAt }] }],
+      [
+        "broken sequence later",
+        { ...base, reservations: [
+          { n: 1, reservedAt: validAt },
+          { n: 3, reservedAt: validAt },
+        ] },
+      ],
+      ["bad reservedAt", { ...base, reservations: [{ n: 1, reservedAt: "yesterday" }] }],
+      ["non-string status", { ...base, reservations: [{ n: 1, reservedAt: validAt, status: 429 }] }],
+      ["bad finishedAt", { ...base, reservations: [{ n: 1, reservedAt: validAt, finishedAt: "nope" }] }],
+      ["non-object entry", { ...base, reservations: ["x"] }],
+    ];
+    for (const [label, ledgerJson] of cases) {
+      const dir = tempDir();
+      writeFileSync(
+        join(dir, "attempt-t-malformed.json"),
+        JSON.stringify(ledgerJson),
+        "utf-8",
+      );
+      expect(
+        () => AttemptLedger.acquire({ dir, attemptId: "t-malformed", chapterSeq: 1, storySha256: "sha" }),
+        label,
+      ).toThrowError(/LEDGER_INVALID/);
+      // The lock created on the way in is cleaned up; nothing dispatched.
+      expect(existsSync(join(dir, "attempt-t-malformed.lock"))).toBe(false);
+    }
+  });
+
+  it("429 persists outcome and cooldown in ONE durable transition", async () => {
+    const dir = tempDir();
+    const ledger = AttemptLedger.acquire({
+      dir, attemptId: "t-atomic", chapterSeq: 1, storySha256: "sha",
+    });
+    const { counting } = countingMock({ chatStatus: 429, chatHeaders: { "retry-after": "45" } });
+    await expect(
+      runExtraction(
+        { countingFetch: counting, config: liveConfig(), attemptLedger: ledger },
+        { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
+      ),
+    ).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    ledger.release();
+    // Both facts are present in the single persisted record on disk.
+    const onDisk = JSON.parse(readFileSync(join(dir, "attempt-t-atomic.json"), "utf-8")) as {
+      reservations: Array<{ n: number; status?: string; finishedAt?: string }>;
+      retryNotBefore: string | null;
+    };
+    expect(onDisk.reservations[0].status).toBe("http-429");
+    expect(onDisk.reservations[0].finishedAt).toBeDefined();
+    expect(onDisk.retryNotBefore).not.toBeNull();
+  });
+
+  it("a recorded 429 without a cooldown is recovered conservatively, never bypassed", () => {
+    // Simulates a crash between the two writes in a pre-repair ledger.
+    const dir = tempDir();
+    const finishedAt = new Date(Date.now() - 1000).toISOString();
+    writeFileSync(
+      join(dir, "attempt-t-recover.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        attemptId: "t-recover",
+        chapterSeq: 1,
+        storySha256: "sha",
+        reservations: [{ n: 1, reservedAt: finishedAt, status: "http-429", finishedAt }],
+        retryNotBefore: null,
+      }),
+      "utf-8",
+    );
+    // The default wait is re-derived from the 429 finish time, so this
+    // acquire still refuses: the stop survives the crash.
+    expect(() =>
+      AttemptLedger.acquire({ dir, attemptId: "t-recover", chapterSeq: 1, storySha256: "sha" }),
+    ).toThrowError(/RATE_LIMITED/);
+    const onDisk = JSON.parse(readFileSync(join(dir, "attempt-t-recover.json"), "utf-8")) as {
+      retryNotBefore: string | null;
+    };
+    expect(onDisk.retryNotBefore).not.toBeNull();
+    expect(new Date(onDisk.retryNotBefore as string).getTime()).toBeGreaterThanOrEqual(
+      Date.parse(finishedAt) + RATE_LIMIT_DEFAULT_WAIT_MS,
+    );
+  });
+
+  it("an old recovered 429 whose default wait has elapsed allows work again", () => {
+    const dir = tempDir();
+    const finishedAt = new Date(Date.now() - RATE_LIMIT_DEFAULT_WAIT_MS - 10_000).toISOString();
+    writeFileSync(
+      join(dir, "attempt-t-old429.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        attemptId: "t-old429",
+        chapterSeq: 1,
+        storySha256: "sha",
+        reservations: [{ n: 1, reservedAt: finishedAt, status: "http-429", finishedAt }],
+        retryNotBefore: null,
+      }),
+      "utf-8",
+    );
+    const ledger = AttemptLedger.acquire({
+      dir, attemptId: "t-old429", chapterSeq: 1, storySha256: "sha",
+    });
+    expect(ledger.dispatchesUsed).toBe(1);
+    ledger.release();
+  });
+
+  it("--live refuses without --attempt-id; --attempt-id is accepted", () => {
+    expect(() =>
+      parseExtractionArgs(["--file", "story.txt", "--live", "--privacy-confirmed"]),
+    ).toThrowError(/ATTEMPT_ID_INVALID/);
+    const parsed = parseExtractionArgs([
+      "--file", "story.txt", "--live", "--privacy-confirmed", "--attempt-id", "attempt-7",
+    ]);
+    expect(parsed.attemptId).toBe("attempt-7");
   });
 });
 
@@ -506,7 +875,7 @@ describe("6. happy path (mock)", () => {
   it("live path with mocked fetch also produces a valid artifact (cost 0, no charge flag)", async () => {
     const { counting, mock } = countingMock({ generationCost: 0 });
     const extracted = await runExtraction(
-      { countingFetch: counting, config: liveConfig() },
+      { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
       { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
     );
     expect(extracted.mode).toBe("live");
@@ -527,7 +896,7 @@ describe("6. happy path (mock)", () => {
   it("a non-zero post-call cost is flagged prominently", async () => {
     const { counting } = countingMock({ generationCost: 0.01 });
     const extracted = await runExtraction(
-      { countingFetch: counting, config: liveConfig() },
+      { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
       { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
     );
     expect(extracted.costUsd).toBe(0.01);
@@ -550,7 +919,7 @@ describe("7. validation retry", () => {
     const { counting, mock } = countingMock({ chatBodies: [{}, {}] });
     await expect(
       runExtraction(
-        { countingFetch: counting, config: liveConfig() },
+        { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
         { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
       ),
     ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
@@ -567,7 +936,7 @@ describe("7. validation retry", () => {
       chatBodies: [{}, buildMockExtractorOutput(CH2, 1)],
     });
     const extracted = await runExtraction(
-      { countingFetch: counting, config: liveConfig() },
+      { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
       { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
     );
     expect(extracted.attempt).toBe(2);
@@ -958,7 +1327,9 @@ describe("11. privacy preconditions", () => {
   });
 
   it("--live with --privacy-confirmed parses (gate itself is separate)", () => {
-    const cli = parseExtractionArgs(["--file", "x.txt", "--live", "--privacy-confirmed"]);
+    const cli = parseExtractionArgs([
+      "--file", "x.txt", "--live", "--privacy-confirmed", "--attempt-id", "attempt-1",
+    ]);
     expect(cli.mode).toBe("live");
     expect(cli.privacyConfirmed).toBe(true);
   });
@@ -969,7 +1340,7 @@ describe("11. privacy preconditions", () => {
     // Mock end-to-end: the artifact must not carry raw model text.
     const { counting } = countingMock({ generationCost: 0 });
     const extracted = await runExtraction(
-      { countingFetch: counting, config: liveConfig() },
+      { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
       { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
     );
     const { artifact } = buildReviewBatchArtifact({ extracted, chapterBody: CH2, chapterSeq: 1 });

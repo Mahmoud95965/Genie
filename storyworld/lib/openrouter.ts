@@ -47,10 +47,28 @@ export class JobBudgetExhaustedError extends Error {
 
 export class ProviderError extends Error {
   readonly code = PROVIDER_ERROR;
-  constructor(message: string) {
+  /** HTTP status when the failure was an HTTP response; undefined for transport errors. */
+  readonly status?: number;
+  /** Parsed Retry-After header (ms), null when absent or invalid. */
+  readonly retryAfterMs: number | null;
+  constructor(message: string, opts: { status?: number; retryAfterMs?: number | null } = {}) {
     super(message);
     this.name = "ProviderError";
+    this.status = opts.status;
+    this.retryAfterMs = opts.retryAfterMs ?? null;
   }
+}
+
+/** Parse a Retry-After header (delta-seconds or HTTP-date) to ms; null when absent/invalid. */
+function parseRetryAfterMs(header: string | null): number | null {
+  if (header === null) return null;
+  const trimmed = header.trim();
+  if (trimmed === "") return null;
+  const secs = Number(trimmed);
+  if (Number.isFinite(secs) && secs >= 0) return Math.round(secs * 1000);
+  const date = Date.parse(trimmed);
+  if (!Number.isNaN(date)) return Math.max(0, date - Date.now());
+  return null;
 }
 
 export class UnpricedModelError extends Error {
@@ -343,7 +361,10 @@ export class OpenRouterClient {
           clearTimeout(timeout);
         }
         if (!response.ok) {
-          throw new ProviderError(`OpenRouter ${response.status} on chat/completions.`);
+          throw new ProviderError(`OpenRouter ${response.status} on chat/completions.`, {
+            status: response.status,
+            retryAfterMs: parseRetryAfterMs(response.headers.get("retry-after")),
+          });
         }
         const data = (await response.json()) as {
           model?: string;
@@ -407,7 +428,9 @@ export class OpenRouterClient {
       latency_ms: latencyMs,
       status: PROVIDER_ERROR,
     });
-    throw new ProviderError(lastError?.message ?? "OpenRouter call failed after retries.");
+    throw lastError instanceof ProviderError
+      ? lastError
+      : new ProviderError(lastError?.message ?? "OpenRouter call failed after retries.");
   }
 
   /** Best-effort cost lookup; missing cost is stored as null, never guessed. */

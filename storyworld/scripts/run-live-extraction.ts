@@ -23,12 +23,14 @@ import { join } from "node:path";
 import { loadConfig } from "../lib/config";
 import {
   assertLivePrerequisites,
+  AttemptLedger,
   buildReviewBatchArtifact,
   CountingFetch,
   LiveRunnerError,
   parseExtractionArgs,
   runExtraction,
   runMockExtraction,
+  storySha256,
   writeReviewBatchArtifact,
 } from "../lib/live-runner";
 
@@ -50,17 +52,30 @@ async function main(): Promise<void> {
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     });
     const countingFetch = new CountingFetch(fetch);
-    extracted = await runExtraction(
-      { countingFetch, config },
-      {
-        chapterBody: storyBody,
-        chapterSeq: cli.chapterSeq,
-        storyOrderBase: cli.storyOrderBase,
-        cast: [],
-        model: slug,
-        provider,
-      },
-    );
+    // D2: durable per-attempt dispatch budget. Acquired BEFORE any
+    // network work and held until the run finishes; the lock is
+    // released in finally, the ledger file itself is never removed.
+    const ledger = AttemptLedger.acquire({
+      dir: outDir,
+      attemptId: cli.attemptId as string,
+      chapterSeq: cli.chapterSeq,
+      storySha256: storySha256(storyBody),
+    });
+    try {
+      extracted = await runExtraction(
+        { countingFetch, config, attemptLedger: ledger },
+        {
+          chapterBody: storyBody,
+          chapterSeq: cli.chapterSeq,
+          storyOrderBase: cli.storyOrderBase,
+          cast: [],
+          model: slug,
+          provider,
+        },
+      );
+    } finally {
+      ledger.release();
+    }
   }
 
   const { artifact } = buildReviewBatchArtifact({
@@ -89,5 +104,12 @@ async function main(): Promise<void> {
 
 main().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error));
+  const code = error instanceof LiveRunnerError ? error.code : "FATAL";
+  if (code === "RATE_LIMITED") {
+    process.exit(3); // stop condition reached; the ledger carries the not-before time
+  }
+  if (code === "BUDGET_EXHAUSTED") {
+    process.exit(4); // attempt over; a further run needs a new owner-approved attempt id
+  }
   process.exit(1);
 });

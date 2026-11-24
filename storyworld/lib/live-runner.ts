@@ -25,7 +25,7 @@
  * config file is never written.
  */
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import type { StoryworldConfig } from "./config";
@@ -80,7 +80,13 @@ export class LiveRunnerError extends Error {
     | "STORY_SHA_MISMATCH"
     | "DECISIONS_INVALID"
     | "STORE_INVALID"
-    | "STORE_VERSION_UNKNOWN";
+    | "STORE_VERSION_UNKNOWN"
+    | "RATE_LIMITED"
+    | "BUDGET_EXHAUSTED"
+    | "ATTEMPT_LOCKED"
+    | "LEDGER_INVALID"
+    | "ATTEMPT_MISMATCH"
+    | "ATTEMPT_ID_INVALID";
   constructor(code: LiveRunnerError["code"], message: string) {
     super(`${code}: ${message}`);
     this.name = "LiveRunnerError";
@@ -330,6 +336,297 @@ export class CountingFetch {
 }
 
 // ---------------------------------------------------------------------------
+// 3c. Attempt ledger — the durable, crash-safe dispatch budget (D2 repair).
+// ---------------------------------------------------------------------------
+
+/**
+ * Default wait after a 429 whose Retry-After header is missing or invalid.
+ * When the server sends a usable Retry-After the ledger records the FULL
+ * not-before time, never shortened; only absent/invalid headers fall back
+ * to this default.
+ */
+export const RATE_LIMIT_DEFAULT_WAIT_MS = 60_000;
+
+const ATTEMPT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+export interface DispatchReservation {
+  n: number;
+  reservedAt: string;
+  status?: string;
+  finishedAt?: string;
+}
+
+export interface AttemptLedgerData {
+  schemaVersion: 1;
+  attemptId: string;
+  chapterSeq: number;
+  storySha256: string;
+  reservations: DispatchReservation[];
+  retryNotBefore: string | null;
+}
+
+/**
+ * One ledger file per owner-approved attempt (`attempt-<id>.json` in the
+ * git-ignored local dir). Every chat-completion dispatch is RESERVED in
+ * the ledger before the network call and completed in place afterwards.
+ * A reservation without a completion (process died mid-call) still counts
+ * as used: the ledger fails closed on ambiguity. The cap of
+ * MAX_CHAT_DISPATCHES is cumulative across invocations of the same
+ * attempt id; a new attempt id is the approval reset and is only minted
+ * on a new owner approval. Ledger files are append-only records and must
+ * never be deleted or renamed to start over: a missing ledger restarts
+ * the local count at 0, so removing one is equivalent to a new attempt
+ * and requires the same approval.
+ *
+ * Writes are durable: temp file, fsync, rename, then a best-effort fsync
+ * of the containing directory. On platforms without directory fsync the
+ * durability guarantee degrades; the owning OpenRouter request log stays
+ * the audit source of last resort.
+ *
+ * Concurrency: an exclusive lock file (`attempt-<id>.lock`) is held for
+ * the process lifetime. A concurrent or stale lock refuses. Stale-lock
+ * inspection never removes the lock automatically and never discounts
+ * the interrupted reservation; a controlled recovery removes ONLY the
+ * lock file after the operator confirms the ledger state.
+ */
+export class AttemptLedger {
+  private constructor(
+    private readonly path: string,
+    private readonly lockPath: string,
+    private readonly data: AttemptLedgerData,
+    private readonly now: () => Date,
+  ) {}
+
+  static acquire(args: {
+    dir: string;
+    attemptId: string;
+    chapterSeq: number;
+    storySha256: string;
+    now?: () => Date;
+  }): AttemptLedger {
+    const now = args.now ?? (() => new Date());
+    if (!ATTEMPT_ID_PATTERN.test(args.attemptId)) {
+      throw new LiveRunnerError(
+        "ATTEMPT_ID_INVALID",
+        `attempt id ${JSON.stringify(args.attemptId)} is not usable: ` +
+          "expected 1-64 chars of letters, digits, dot, underscore or hyphen, starting with a letter or digit",
+      );
+    }
+    mkdirSync(args.dir, { recursive: true });
+    const path = join(args.dir, `attempt-${args.attemptId}.json`);
+    const lockPath = join(args.dir, `attempt-${args.attemptId}.lock`);
+
+    // Exclusive lock, held until release(). Never auto-removed.
+    try {
+      const fd = openSync(lockPath, "wx");
+      closeSync(fd);
+    } catch {
+      throw new LiveRunnerError(
+        "ATTEMPT_LOCKED",
+        `attempt ${JSON.stringify(args.attemptId)} is locked (${lockPath}). ` +
+          "Another invocation is running, or a previous one crashed. Inspect the ledger first; " +
+          "a controlled recovery removes only the lock file and never discounts the interrupted dispatch.",
+      );
+    }
+
+    let data: AttemptLedgerData;
+    if (existsSync(path)) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(readFileSync(path, "utf-8")) as unknown;
+      } catch (error) {
+        rmSync(lockPath, { force: true });
+        throw new LiveRunnerError(
+          "LEDGER_INVALID",
+          `attempt ledger at ${path} is not valid JSON (${error instanceof Error ? error.message : String(error)}) — refusing all dispatches`,
+        );
+      }
+      const invalid = (): never => {
+        rmSync(lockPath, { force: true });
+        throw new LiveRunnerError(
+          "LEDGER_INVALID",
+          `attempt ledger at ${path} is malformed — refusing all dispatches (fail closed)`,
+        );
+      };
+      const isDate = (value: unknown): value is string =>
+        typeof value === "string" && !Number.isNaN(Date.parse(value));
+      if (
+        typeof parsed !== "object" || parsed === null ||
+        (parsed as Record<string, unknown>).schemaVersion !== 1 ||
+        (parsed as Record<string, unknown>).attemptId !== args.attemptId ||
+        !Array.isArray((parsed as Record<string, unknown>).reservations)
+      ) {
+        invalid();
+      }
+      const candidate = parsed as {
+        reservations: unknown[];
+        retryNotBefore: unknown;
+      };
+      // Every reservation entry must be a well-formed, in-order record; a
+      // malformed count field would silently change the dispatch budget.
+      for (const [index, entry] of candidate.reservations.entries()) {
+        if (typeof entry !== "object" || entry === null) invalid();
+        const r = entry as Record<string, unknown>;
+        if (!Number.isInteger(r.n) || (r.n as number) < 1) invalid();
+        if ((r.n as number) !== index + 1) invalid(); // dense 1..N sequence
+        if (!isDate(r.reservedAt)) invalid();
+        if (r.status !== undefined && typeof r.status !== "string") invalid();
+        if (r.finishedAt !== undefined && !isDate(r.finishedAt)) invalid();
+      }
+      // retryNotBefore is either null or a strict, finite date. A garbage
+      // string used to parse as Invalid Date and silently BYPASS the delay.
+      if (candidate.retryNotBefore !== null && !isDate(candidate.retryNotBefore)) {
+        invalid();
+      }
+      data = parsed as AttemptLedgerData;
+      // Conservative recovery: a 429 outcome without a recorded cooldown
+      // (crash between the two writes in a pre-repair ledger) must not lose
+      // the stop. Re-derive the default wait from when the 429 finished.
+      if (data.retryNotBefore === null) {
+        const lastRateLimited = [...data.reservations]
+          .reverse()
+          .find((r) => r.status === "http-429");
+        if (lastRateLimited !== undefined) {
+          const base = Date.parse(lastRateLimited.finishedAt ?? lastRateLimited.reservedAt);
+          data.retryNotBefore = new Date(base + RATE_LIMIT_DEFAULT_WAIT_MS).toISOString();
+        }
+      }
+      if (data.chapterSeq !== args.chapterSeq || data.storySha256 !== args.storySha256) {
+        rmSync(lockPath, { force: true });
+        throw new LiveRunnerError(
+          "ATTEMPT_MISMATCH",
+          `attempt ${JSON.stringify(args.attemptId)} is bound to chapter ${data.chapterSeq} ` +
+            `of a different story body — an attempt covers exactly one chapter of one story`,
+        );
+      }
+    } else {
+      data = {
+        schemaVersion: 1,
+        attemptId: args.attemptId,
+        chapterSeq: args.chapterSeq,
+        storySha256: args.storySha256,
+        reservations: [],
+        retryNotBefore: null,
+      };
+    }
+
+    const ledger = new AttemptLedger(path, lockPath, data, now);
+    ledger.persist();
+    if (data.retryNotBefore !== null && now() < new Date(data.retryNotBefore)) {
+      rmSync(lockPath, { force: true });
+      throw new LiveRunnerError(
+        "RATE_LIMITED",
+        `attempt ${JSON.stringify(args.attemptId)} is rate-limited until ${data.retryNotBefore} ` +
+          "(recorded from the server's Retry-After or the default wait) — no dispatch before then",
+      );
+    }
+    return ledger;
+  }
+
+  /** Dispatches used so far. Every reservation counts, completed or not. */
+  get dispatchesUsed(): number {
+    return this.data.reservations.length;
+  }
+
+  get retryNotBefore(): string | null {
+    return this.data.retryNotBefore;
+  }
+
+  /** Reserve one dispatch BEFORE the network call. Throws BUDGET_EXHAUSTED when the cap is reached. */
+  reserve(): number {
+    if (this.data.reservations.length >= MAX_CHAT_DISPATCHES) {
+      throw new LiveRunnerError(
+        "BUDGET_EXHAUSTED",
+        `attempt ${JSON.stringify(this.data.attemptId)} has used all ${MAX_CHAT_DISPATCHES} ` +
+          "dispatches across its invocations — this attempt is over; a further run needs a new owner-approved attempt id",
+      );
+    }
+    const n = this.data.reservations.length + 1;
+    this.data.reservations.push({ n, reservedAt: this.now().toISOString() });
+    this.persist();
+    return n;
+  }
+
+  /** Complete a reservation in place after the network call settles. */
+  complete(n: number, status: string): void {
+    const reservation = this.data.reservations.find((r) => r.n === n);
+    if (reservation === undefined) return;
+    reservation.status = status;
+    reservation.finishedAt = this.now().toISOString();
+    this.persist();
+  }
+
+  /**
+   * 429 outcome as ONE durable transition: the reservation completion
+   * and the cooldown land in the same persisted write, so a crash cannot
+   * record the 429 without the stop. The server's Retry-After is honored
+   * in full when present; only a missing/invalid header falls back to
+   * the default wait.
+   */
+  completeRateLimited(n: number, retryAfterMs: number | null): Date {
+    const reservation = this.data.reservations.find((r) => r.n === n);
+    if (reservation !== undefined) {
+      reservation.status = "http-429";
+      reservation.finishedAt = this.now().toISOString();
+    }
+    const waitMs = retryAfterMs ?? RATE_LIMIT_DEFAULT_WAIT_MS;
+    const notBefore = new Date(this.now().getTime() + waitMs);
+    this.data.retryNotBefore = notBefore.toISOString();
+    this.persist();
+    return notBefore;
+  }
+
+  /**
+   * Record the rate-limit not-before time. The server's Retry-After is
+   * honored in full when present; only a missing/invalid header falls
+   * back to the default wait. Prefer completeRateLimited() on the 429
+   * path; this stays for direct ledger use.
+   */
+  noteRateLimited(retryAfterMs: number | null): Date {
+    const waitMs = retryAfterMs ?? RATE_LIMIT_DEFAULT_WAIT_MS;
+    const notBefore = new Date(this.now().getTime() + waitMs);
+    this.data.retryNotBefore = notBefore.toISOString();
+    this.persist();
+    return notBefore;
+  }
+
+  /** Release the concurrency lock. The ledger file itself is never touched. */
+  release(): void {
+    rmSync(this.lockPath, { force: true });
+  }
+
+  private persist(): void {
+    const tmp = `${this.path}.tmp`;
+    const fd = openSync(tmp, "w");
+    try {
+      writeFileSync(fd, `${JSON.stringify(this.data, null, 2)}\n`);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync(tmp, this.path);
+    try {
+      const dirFd = openSync(dirname(this.path), "r");
+      try {
+        fsyncSync(dirFd);
+      } finally {
+        closeSync(dirFd);
+      }
+    } catch (error) {
+      // Only the expected "this platform cannot fsync a directory" cases
+      // are tolerated; real disk failures (EIO, ENOSPC, EROFS, EBADF)
+      // propagate instead of being silently swallowed.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!["ENOSYS", "ENOTSUP", "EOPNOTSUPP", "EINVAL", "EPERM"].includes(code ?? "")) {
+        throw error;
+      }
+      // Durability degrades to the file fsync above; the owning
+      // OpenRouter log remains the audit source of last resort.
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 4. Extraction — up to 3 dispatches, at most one validation retry, then stop.
 // ---------------------------------------------------------------------------
 
@@ -340,6 +637,8 @@ export interface RunExtractionDeps {
   countingFetch: CountingFetch;
   /** Repo config as loaded (the runner overrides maxRetriesPerCall in memory only). */
   config: StoryworldConfig;
+  /** The durable per-attempt dispatch budget. Required for every live run. */
+  attemptLedger: AttemptLedger;
 }
 
 export interface RunExtractionArgs {
@@ -426,6 +725,9 @@ export async function runExtraction(
     attempts += 1;
     // Price pre-flight before EVERY dispatch — fails closed.
     await runPricePreflight(deps.countingFetch.fetch, override.openrouter.baseUrl, args.model);
+    // Budget reservation BEFORE the network call: a crash after this line
+    // still counts the dispatch as used (the ledger fails closed).
+    const reservation = deps.attemptLedger.reserve();
     const userMessage =
       validationRetries > 0
         ? `${baseUserMessage}\n\nThe previous output failed validation. Fix ONLY these problems and return corrected JSON:\n${formatValidationErrors(lastValidationErrors)}`
@@ -449,15 +751,46 @@ export async function runExtraction(
             : undefined,
         budget,
       });
+      deps.attemptLedger.complete(reservation, "ok");
     } catch (error) {
-      if (error instanceof LiveRunnerError) throw error;
+      if (error instanceof LiveRunnerError) {
+        deps.attemptLedger.complete(reservation, "refused");
+        throw error;
+      }
       if (error instanceof JobBudgetExhaustedError) {
+        deps.attemptLedger.complete(reservation, "budget");
         throw new LiveRunnerError("PROVIDER_ERROR", `job budget exhausted: ${error.message}`);
       }
       if (error instanceof LiveCallsDisabledError || error instanceof UnpricedModelError) {
+        deps.attemptLedger.complete(reservation, "gate");
         throw new LiveRunnerError("LIVE_GATE_MISSING", error.message);
       }
-      // Provider/transport failure: retry while dispatches remain.
+      if (error instanceof ProviderError && error.status === 429) {
+        // Rate-limited: stop after the FIRST 429, never burst. The 429
+        // outcome and the server's full not-before time (or the default
+        // wait) persist in ONE durable transition.
+        const notBefore = deps.attemptLedger.completeRateLimited(reservation, error.retryAfterMs);
+        throw new LiveRunnerError(
+          "RATE_LIMITED",
+          `upstream rate-limited (HTTP 429) after ${attempts} dispatch(es) — ` +
+            `no further dispatch before ${notBefore.toISOString()}, recorded in the attempt ledger`,
+        );
+      }
+      if (
+        error instanceof ProviderError &&
+        error.status !== undefined &&
+        error.status >= 400 &&
+        error.status < 500
+      ) {
+        // Non-retryable client error: fail fast, do not burn the budget.
+        deps.attemptLedger.complete(reservation, `http-${error.status}`);
+        throw new LiveRunnerError(
+          "PROVIDER_ERROR",
+          `non-retryable HTTP ${error.status} on chat/completions — refusing to spend the remaining dispatch budget on retries`,
+        );
+      }
+      // 5xx / transport failure: retry immediately while dispatches remain.
+      deps.attemptLedger.complete(reservation, "error");
       lastProviderMessage = error instanceof Error ? error.message : String(error);
       if (attempts >= MAX_CHAT_DISPATCHES) {
         throw new LiveRunnerError(
@@ -1581,6 +1914,8 @@ export interface ExtractionCliArgs {
   outDir: string | null;
   storyTitle: string | null;
   storyOrderBase: number;
+  /** Owner-approved attempt id; required for --live. */
+  attemptId: string | null;
 }
 
 export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
@@ -1592,6 +1927,7 @@ export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
     outDir: null,
     storyTitle: null,
     storyOrderBase: 0,
+    attemptId: null,
   };
   let sawMock = false;
   let sawLive = false;
@@ -1628,6 +1964,9 @@ export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
       case "--privacy-confirmed":
         args.privacyConfirmed = true;
         break;
+      case "--attempt-id":
+        args.attemptId = next();
+        break;
       case "--out":
         args.outDir = next();
         break;
@@ -1656,6 +1995,13 @@ export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
     throw new LiveRunnerError(
       "PRIVACY_NOT_CONFIRMED",
       "--live refuses without --privacy-confirmed: attest that the section 4 privacy preconditions were checked today",
+    );
+  }
+  if (args.mode === "live" && (args.attemptId === null || args.attemptId.length === 0)) {
+    throw new LiveRunnerError(
+      "ATTEMPT_ID_INVALID",
+      "--live refuses without --attempt-id: every live run needs an owner-approved attempt id " +
+        "so its dispatch budget persists across invocations",
     );
   }
   return args;
