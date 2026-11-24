@@ -69,6 +69,8 @@ async function main(): Promise<void> {
         {
           chapterBody: storyBody,
           chapterSeq: cli.chapterSeq,
+          extractorVersion: cli.extractorVersion,
+          ...(cli.maxDispatches !== null ? { dispatchCap: cli.maxDispatches } : {}),
           storyOrderBase: cli.storyOrderBase,
           cast: [],
           model: slug,

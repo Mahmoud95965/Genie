@@ -220,6 +220,17 @@ export function commitBatch(
 
   // 1. Propositions.
   for (const item of accepted.filter((i) => i.section === "propositions")) {
+    const modality = item.data.modality;
+    if (batch.requireModality === true && modality === undefined) {
+      fail(item.id, "extractor.v4 batch: proposition has no modality; refusing to treat it as asserted");
+      continue;
+    }
+    if (modality !== undefined && modality !== "asserted") {
+      // v4: a promise/intention/report/hypothetical is not a world fact. The
+      // reviewer must reject it (it stays on the batch as history).
+      fail(item.id, `proposition modality ${JSON.stringify(modality)} cannot be committed as an asserted world fact; reject it`);
+      continue;
+    }
     const id = randomUUID();
     if (item.localId) propMap.set(item.localId, id);
     const statement = asString(item.data.statement);

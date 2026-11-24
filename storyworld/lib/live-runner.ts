@@ -45,6 +45,7 @@ import {
   buildExtractorUserMessage,
 } from "./extractor/prompts";
 import { GENIE_EXTRACTOR_OUTPUT_SCHEMA } from "./extractor/schema";
+import { getExtractorProfile } from "./extractor/profiles";
 import { validateExtractorOutput, type ValidationIssue } from "./extractor/validate";
 import {
   codePointLength,
@@ -794,9 +795,19 @@ export interface RunExtractionArgs {
   maxTokens?: number;
   /** Gemini: reasoning effort (default GEMINI_DEFAULT_REASONING_EFFORT); reasoning tokens count against max_tokens. */
   reasoningEffort?: string;
+  /** Extractor profile version (default "extractor.v3", the unchanged baseline candidate). */
+  extractorVersion?: string;
+  /**
+   * Hard cap on chat dispatches for THIS run, 1..MAX_CHAT_DISPATCHES (default 3).
+   * Every outbound inference counts: first call, transport retry, and the
+   * corrective validation retry alike. Lower it to honor a smaller user budget.
+   */
+  dispatchCap?: number;
 }
 
 export interface ExtractedArtifact {
+  /** Extractor profile used (absent in artifacts from before profiles existed = extractor prompt of that run). */
+  promptVersion?: string;
   /** The validated, parsed extractor output (a `GenieExtractorOutput` object). */
   output: Record<string, unknown>;
   mode: ExtractionMode;
@@ -855,6 +866,23 @@ export async function runExtraction(
   deps: RunExtractionDeps,
   args: RunExtractionArgs,
 ): Promise<ExtractedArtifact> {
+  const profile = getExtractorProfile(args.extractorVersion);
+  // The cap is over the attempt ledger's CUMULATIVE dispatches for this attempt id
+  // (earlier invocations count), so re-running the same id cannot exceed it.
+  const ledgerUsedAtStart = deps.attemptLedger.dispatchesUsed;
+  const requestedCap = args.dispatchCap ?? MAX_CHAT_DISPATCHES;
+  if (!Number.isInteger(requestedCap) || requestedCap < 1 || requestedCap > MAX_CHAT_DISPATCHES) {
+    throw new LiveRunnerError("VALIDATION_FAILED", `dispatchCap must be an integer in 1..${MAX_CHAT_DISPATCHES}`);
+  }
+  let dispatchCap = requestedCap - ledgerUsedAtStart;
+  // Default cap: the ledger itself reports exhaustion (BUDGET_EXHAUSTED) on its reserve().
+  if (dispatchCap < 1 && requestedCap === MAX_CHAT_DISPATCHES) dispatchCap = 1;
+  if (dispatchCap < 1) {
+    throw new LiveRunnerError(
+      "DISPATCH_CEILING_EXCEEDED",
+      `attempt already used ${ledgerUsedAtStart} dispatch(es); cap is ${requestedCap}`,
+    );
+  }
   const body = normalizeBody(args.chapterBody);
   if (body.length === 0) {
     throw new LiveRunnerError("VALIDATION_FAILED", "chapter body is empty after normalization");
@@ -916,9 +944,9 @@ export async function runExtraction(
       );
     }
     const maxInputTokens =
-      (EXTRACTOR_SYSTEM_PROMPT.length +
+      (profile.systemPrompt.length +
         baseUserMessage.length +
-        JSON.stringify(GENIE_EXTRACTOR_OUTPUT_SCHEMA).length) * 2;
+        JSON.stringify(profile.schema).length) * 2;
     worstCaseUsd = runStaticPricePreflight({
       staticPrices: args.staticPrices,
       maxInputTokensPerDispatch: maxInputTokens,
@@ -931,7 +959,7 @@ export async function runExtraction(
   let lastValidationErrors: ValidationIssue[] = [];
   let lastProviderMessage: string | null = null;
 
-  while (attempts < MAX_CHAT_DISPATCHES) {
+  while (attempts < dispatchCap) {
     attempts += 1;
     // Price pre-flight before EVERY dispatch — fails closed. OpenRouter
     // checks the live catalog per dispatch; the Gemini static gate runs
@@ -951,12 +979,12 @@ export async function runExtraction(
       result = await client.chatCompletion({
         model: args.model,
         messages: [
-          { role: "system", content: EXTRACTOR_SYSTEM_PROMPT },
+          { role: "system", content: profile.systemPrompt },
           { role: "user", content: userMessage },
         ],
         responseFormat: {
           name: "GenieExtractorOutput",
-          schema: GENIE_EXTRACTOR_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
+          schema: profile.schema,
         },
         purpose: "extract",
         maxTokens: args.api === "gemini" ? geminiMaxTokens : args.maxTokens,
@@ -1011,7 +1039,7 @@ export async function runExtraction(
       // 5xx / transport failure: retry immediately while dispatches remain.
       deps.attemptLedger.complete(reservation, "error");
       lastProviderMessage = error instanceof Error ? error.message : String(error);
-      if (attempts >= MAX_CHAT_DISPATCHES) {
+      if (attempts >= dispatchCap) {
         throw new LiveRunnerError(
           "PROVIDER_ERROR",
           `extraction failed after ${attempts} dispatch(es): ${lastProviderMessage}`,
@@ -1031,12 +1059,13 @@ export async function runExtraction(
           `(up to ${GEMINI_MAX_OUTPUT_TOKENS}) or lower reasoning effort. The truncated output was not parsed.`,
       );
     }
-    const validation = validateExtractorOutput(result.output);
+    const validation = validateExtractorOutput(result.output, { requireModality: profile.requireModality });
     if (validation.valid) {
       if (typeof result.output !== "object" || result.output === null || Array.isArray(result.output)) {
         throw new LiveRunnerError("VALIDATION_FAILED", "validated extractor output is not an object");
       }
       return {
+        promptVersion: profile.version,
         output: result.output as Record<string, unknown>,
         mode: "live",
         attempt: attempts,
@@ -1072,7 +1101,7 @@ export async function runExtraction(
       );
     }
     validationRetries += 1;
-    if (attempts >= MAX_CHAT_DISPATCHES) {
+    if (attempts >= dispatchCap) {
       throw new LiveRunnerError(
         "VALIDATION_FAILED",
         `extractor output failed validation after ${attempts} attempt(s) with no dispatches left for the validation retry: ${formatValidationErrors(validation.errors)}`,
@@ -1381,6 +1410,7 @@ export function buildReviewBatchArtifact(args: BuildArtifactArgs): {
     body,
     output: args.extracted.output,
     chapterSeq: args.chapterSeq,
+    requireModality: getExtractorProfile(args.extracted.promptVersion).requireModality,
   });
   const artifact: ReviewBatchArtifact = {
     schemaVersion: REVIEW_BATCH_SCHEMA_VERSION,
@@ -1396,7 +1426,7 @@ export function buildReviewBatchArtifact(args: BuildArtifactArgs): {
     modelResolved: args.extracted.modelResolved,
     provider: args.extracted.provider,
     extractor: {
-      promptVersion: EXTRACTOR_PROMPT_VERSION,
+      promptVersion: args.extracted.promptVersion ?? EXTRACTOR_PROMPT_VERSION,
       attempts: args.extracted.attempt,
       validationRetries: args.extracted.validationRetries,
       promptTokens: args.extracted.promptTokens,
@@ -1954,6 +1984,7 @@ export function runReviewAccept(args: RunReviewAcceptArgs): ReviewSummary {
     output: artifact.extractorOutput,
     chapterRevisionId: revision.id,
     chapterSeq: artifact.chapterSeq,
+    requireModality: artifact.extractor.promptVersion === "extractor.v4",
   });
   if (batch.bodySha256 !== artifact.bodySha256) {
     throw new LiveRunnerError(
@@ -2166,6 +2197,10 @@ export interface ExtractionCliArgs {
   storyOrderBase: number;
   /** Owner-approved attempt id; required for --live. */
   attemptId: string | null;
+  /** Extractor profile version; default extractor.v3. */
+  extractorVersion: string;
+  /** Per-run dispatch cap (1..3); null = default 3. */
+  maxDispatches: number | null;
 }
 
 export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
@@ -2178,6 +2213,8 @@ export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
     storyTitle: null,
     storyOrderBase: 0,
     attemptId: null,
+    extractorVersion: "extractor.v3",
+    maxDispatches: null,
   };
   let sawMock = false;
   let sawLive = false;
@@ -2220,6 +2257,20 @@ export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
       case "--out":
         args.outDir = next();
         break;
+      case "--extractor": {
+        const v = next();
+        getExtractorProfile(v); // throws on unknown
+        args.extractorVersion = v;
+        break;
+      }
+      case "--max-dispatches": {
+        const n = Number(next());
+        if (!Number.isInteger(n) || n < 1 || n > MAX_CHAT_DISPATCHES) {
+          throw new LiveRunnerError("VALIDATION_FAILED", `--max-dispatches must be an integer in 1..${MAX_CHAT_DISPATCHES}`);
+        }
+        args.maxDispatches = n;
+        break;
+      }
       case "--title":
         args.storyTitle = next();
         break;

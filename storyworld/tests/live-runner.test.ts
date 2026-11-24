@@ -1649,3 +1649,93 @@ describe("13. gemini adapter (offline)", () => {
     expect(chatCalls(mock).length).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// extractor.v4 profile through the runner (mock fetch only, zero network).
+// ---------------------------------------------------------------------------
+describe("extractor profiles in the runner", () => {
+  const withProp = (modality?: string) => {
+    const o = buildMockExtractorOutput(CH2, 1) as Record<string, unknown>;
+    const quote = "قال عمر إن الرسايل مخبأة";
+    const s = CH2.indexOf(quote);
+    const p: Record<string, unknown> = {
+      local_id: "pm1",
+      statement: "الرسايل مخبأة",
+      evidence: [{ quote, start_offset: [...CH2.slice(0, s)].length, end_offset: [...CH2.slice(0, s)].length + [...quote].length }],
+    };
+    if (modality) p.modality = modality;
+    return { ...o, propositions: [p] };
+  };
+
+  it("default (v3): original schema and prompt are sent, artifact says extractor.v3", async () => {
+    const { counting, mock } = countingMock({ chatBodies: [withProp()] });
+    const r = await runExtraction(
+      { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
+      { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER },
+    );
+    expect(r.promptVersion).toBe("extractor.v3");
+    const body = chatCalls(mock)[0].body as { response_format: { json_schema: { schema: { title: string } } } };
+    expect(JSON.stringify(body)).toContain("GenieExtractorOutput");
+    expect(JSON.stringify(body)).not.toContain("GenieExtractorOutputV4");
+  });
+
+  it("v4: sends the v4 schema+prompt and accepts a modality-bearing output", async () => {
+    const { counting, mock } = countingMock({ chatBodies: [withProp("reported")] });
+    const r = await runExtraction(
+      { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
+      { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER, extractorVersion: "extractor.v4" },
+    );
+    expect(r.promptVersion).toBe("extractor.v4");
+    const sent = JSON.stringify(chatCalls(mock)[0].body);
+    expect(sent).toContain("GenieExtractorOutputV4");
+    expect(sent).toContain("must never be given modality asserted");
+  });
+
+  it("v4: an output without modality fails validation (one corrective retry, then stop)", async () => {
+    const { counting, mock } = countingMock({ chatBodies: [withProp()] });
+    await expect(
+      runExtraction(
+        { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
+        { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER, extractorVersion: "extractor.v4" },
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    expect(chatCalls(mock).length).toBe(2);
+  });
+});
+
+describe("dispatch cap counts every inference (v4 evaluation budget)", () => {
+  it("cap 2: first call + the corrective validation retry are the whole budget", async () => {
+    const bad = { ...(buildMockExtractorOutput(CH2, 1) as Record<string, unknown>), propositions: [{ local_id: "p", statement: "x", evidence: [] }] };
+    const { counting, mock } = countingMock({ chatBodies: [bad] });
+    await expect(
+      runExtraction(
+        { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
+        { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER, extractorVersion: "extractor.v4", dispatchCap: 2 },
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    expect(chatCalls(mock).length).toBe(2);
+  });
+  it("cap 2 with transport errors: stops at 2 dispatches, not 3", async () => {
+    const { counting, mock } = countingMock({ chatStatus: 500 });
+    await expect(
+      runExtraction(
+        { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
+        { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER, dispatchCap: 2 },
+      ),
+    ).rejects.toMatchObject({ code: "PROVIDER_ERROR" });
+    expect(chatCalls(mock).length).toBe(2);
+  });
+  it("cap 1 with a validation failure: no retry at all; flag parsing is bounded", async () => {
+    const bad = { ...(buildMockExtractorOutput(CH2, 1) as Record<string, unknown>), propositions: [{ local_id: "p", statement: "x", evidence: [] }] };
+    const { counting, mock } = countingMock({ chatBodies: [bad] });
+    await expect(
+      runExtraction(
+        { countingFetch: counting, config: liveConfig(), attemptLedger: testAttemptLedger() },
+        { chapterBody: CH2, chapterSeq: 1, model: SLUG, provider: PROVIDER, dispatchCap: 1 },
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    expect(chatCalls(mock).length).toBe(1);
+    expect(parseExtractionArgs(["--file", "a", "--max-dispatches", "2"]).maxDispatches).toBe(2);
+    expect(() => parseExtractionArgs(["--file", "a", "--max-dispatches", "4"])).toThrow();
+  });
+});

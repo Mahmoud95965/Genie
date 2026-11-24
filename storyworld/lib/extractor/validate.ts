@@ -111,7 +111,14 @@ class Checker {
 }
 
 /** Validate an unknown value as a `GenieExtractorOutput` object. */
-export function validateExtractorOutput(value: unknown): ValidationResult {
+const MODALITIES = ["asserted", "promised", "intended", "reported", "hypothetical"];
+
+/**
+ * `opts.requireModality` (extractor.v4): every proposition must carry a valid
+ * `modality`. Default (v3 and legacy fixtures): `modality` is optional, and an
+ * absent value means asserted. An invalid value is always an error.
+ */
+export function validateExtractorOutput(value: unknown, opts: { requireModality?: boolean } = {}): ValidationResult {
   const c = new Checker();
   const root = c.object(
     value,
@@ -122,8 +129,15 @@ export function validateExtractorOutput(value: unknown): ValidationResult {
 
   const propositions = c.array(root.propositions, "$.propositions") ?? [];
   propositions.forEach((item, i) => {
-    const p = c.object(item, ["local_id", "statement", "evidence"], `$.propositions[${i}]`);
+    const hasModality = isRecord(item) && "modality" in item;
+    if (opts.requireModality && isRecord(item) && !hasModality) c.at(`$.propositions[${i}].modality`, "missing required property");
+    const p = c.object(
+      item,
+      hasModality ? ["local_id", "statement", "evidence", "modality"] : ["local_id", "statement", "evidence"],
+      `$.propositions[${i}]`,
+    );
     if (!p) return;
+    if (hasModality) c.enum(p.modality, MODALITIES, `$.propositions[${i}].modality`);
     c.string(p.local_id, `$.propositions[${i}].local_id`);
     c.string(p.statement, `$.propositions[${i}].statement`);
     c.evidence(p.evidence, `$.propositions[${i}].evidence`);

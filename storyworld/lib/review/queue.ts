@@ -97,6 +97,8 @@ export interface ReviewBatch {
   bodySha256: string;
   items: ReviewItem[];
   createdAt: string;
+  /** extractor.v4 batch: every proposition must carry a modality (absence is an error, never "asserted"). */
+  requireModality?: boolean;
 }
 
 export interface CreateBatchInput {
@@ -106,6 +108,8 @@ export interface CreateBatchInput {
   chapterRevisionId?: string | null;
   fixtureId?: string | null;
   chapterSeq?: number | null;
+  /** Set for extractor.v4 output: validation requires modality on every proposition. */
+  requireModality?: boolean;
 }
 
 const SECTIONS: ReviewSection[] = ["propositions", "events", "knowledge", "character_facts", "promises"];
@@ -119,7 +123,7 @@ export class ReviewQueue {
 
   /** Validate + verify an extraction and turn it into reviewable items. */
   createBatch(input: CreateBatchInput): ReviewBatch {
-    const validation = validateExtractorOutput(input.output);
+    const validation = validateExtractorOutput(input.output, { requireModality: input.requireModality === true });
     if (!validation.valid) {
       throw new ReviewError(
         "VALIDATION_FAILED",
@@ -168,7 +172,11 @@ export class ReviewQueue {
           evidence: evidenceSpans,
           status: "pending",
           rejectReason: null,
-          verificationError: rejectedByPath.get(itemPath) ?? null,
+          verificationError:
+            rejectedByPath.get(itemPath) ??
+            (section === "propositions" && rawItem.modality !== undefined && rawItem.modality !== "asserted"
+              ? `modality ${JSON.stringify(rawItem.modality)}: not committable as an asserted world fact; reject it`
+              : null),
           targetPromiseId: null,
           resolutionConflict: null,
           resolutionConflictConfirmed: false,
@@ -185,6 +193,7 @@ export class ReviewQueue {
       bodySha256,
       items,
       createdAt: new Date().toISOString(),
+      ...(input.requireModality === true ? { requireModality: true } : {}),
     };
     this.batches.set(batch.id, batch);
     return batch;
