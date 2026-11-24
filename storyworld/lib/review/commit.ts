@@ -60,6 +60,12 @@ export interface CommitBatchOptions {
    */
   knownPropositions?: Map<string, string>;
   knownEvents?: Map<string, string>;
+  /**
+   * Optional explicit alias -> canonical character name map (caller-supplied,
+   * e.g. from a reviewed cast list). Names are matched exactly; an alias is
+   * never guessed. Without it, characters merge by exact name only.
+   */
+  characterAliases?: Record<string, string>;
 }
 
 export interface CommitBatchResult {
@@ -169,6 +175,10 @@ export function commitBatch(
 
   // Character names referenced by accepted items (created on first use).
   const characterNames = new Set<string>();
+  const canonicalName = (name: string): string => {
+    const map = options.characterAliases;
+    return map && Object.prototype.hasOwnProperty.call(map, name) ? map[name] : name;
+  };
   const collectNames = (item: ReviewItem) => {
     const data = item.data;
     if (item.section === "events") {
@@ -176,27 +186,27 @@ export function commitBatch(
       for (const p of participants) {
         if (isRecord(p)) {
           const name = asString(p.character);
-          if (name) characterNames.add(name);
+          if (name) characterNames.add(canonicalName(name));
         }
       }
       if (isRecord(data.knowledge_transfer)) {
         const from = asString(data.knowledge_transfer.from_character);
-        if (from) characterNames.add(from);
+        if (from) characterNames.add(canonicalName(from));
         const to = data.knowledge_transfer.to_characters;
-        if (Array.isArray(to)) for (const n of to) if (typeof n === "string") characterNames.add(n);
+        if (Array.isArray(to)) for (const n of to) if (typeof n === "string") characterNames.add(canonicalName(n));
       }
       if (isRecord(data.knowledge_use)) {
         const name = asString(data.knowledge_use.character);
-        if (name) characterNames.add(name);
+        if (name) characterNames.add(canonicalName(name));
       }
     }
     if (item.section === "knowledge" || item.section === "character_facts") {
       const name = asString(data.character);
-      if (name) characterNames.add(name);
+      if (name) characterNames.add(canonicalName(name));
     }
     if (item.section === "knowledge_denials") {
       const name = asString(data.character);
-      if (name) characterNames.add(name);
+      if (name) characterNames.add(canonicalName(name));
     }
   };
   for (const item of accepted) collectNames(item);
@@ -210,7 +220,7 @@ export function commitBatch(
       fail(item.id, "missing character name");
       return null;
     }
-    const id = characterIds.get(n);
+    const id = characterIds.get(canonicalName(n));
     if (!id) {
       fail(item.id, `character ${JSON.stringify(n)} was not created`);
       return null;

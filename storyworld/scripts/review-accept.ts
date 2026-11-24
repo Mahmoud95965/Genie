@@ -21,6 +21,7 @@
 import { join } from "node:path";
 
 import {
+  loadAliasesFile,
   parseReviewAcceptArgs,
   renderReviewSummaryText,
   runReviewAccept,
@@ -38,6 +39,7 @@ function main(): void {
     storePath,
     outDir,
     author: cli.author ?? undefined,
+    ...(cli.aliases ? { characterAliases: loadAliasesFile(cli.aliases) } : {}),
   });
   console.log(renderReviewSummaryText(summary));
 }

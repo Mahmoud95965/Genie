@@ -782,6 +782,8 @@ export interface RunExtractionArgs {
   storyOrderBase?: number;
   /** Cast starts empty: extraction discovers the cast; never fabricated. */
   cast?: string[];
+  /** Earlier committed events (see priorTimelineFromStore). Human-accepted state only; absent for the first chapter. */
+  priorTimeline?: Array<{ summary: string; spanStart: number | null; spanEnd: number | null }>;
   model: string;
   /** Pinned no-fallback provider from the approved entry (live only; null for Gemini). */
   provider?: string | null;
@@ -905,6 +907,7 @@ export async function runExtraction(
     chapterSeq: args.chapterSeq,
     storyOrderBase: args.storyOrderBase ?? 0,
     cast: args.cast ?? [],
+    ...(args.priorTimeline ? { priorTimeline: args.priorTimeline } : {}),
   });
 
   // Gemini static price gate — once, before any dispatch. The worst case
@@ -1830,6 +1833,8 @@ export interface RunReviewAcceptArgs {
   storyTitle?: string | null;
   author?: string;
   now?: () => Date;
+  /** Explicit alias -> canonical name map (human-supplied; never inferred). Passed to commitBatch. */
+  characterAliases?: Record<string, string>;
 }
 
 function findingsFileNames(when: Date = new Date()): { json: string; md: string } {
@@ -2082,6 +2087,7 @@ export function runReviewAccept(args: RunReviewAcceptArgs): ReviewSummary {
         author: args.author ?? "human",
         knownPropositions: localIdMaps.propositions,
         knownEvents: localIdMaps.events,
+        ...(args.characterAliases ? { characterAliases: args.characterAliases } : {}),
       });
     } catch (error) {
       throw new LiveRunnerError(
@@ -2187,6 +2193,56 @@ export function runReviewAccept(args: RunReviewAcceptArgs): ReviewSummary {
 // 8. CLI argument parsing (pure; the scripts are thin wrappers).
 // ---------------------------------------------------------------------------
 
+/**
+ * Story-order timeline of events already COMMITTED in a durable store (i.e.
+ * accepted by a reviewer). Empty when the store does not exist yet.
+ */
+export function priorTimelineFromStore(
+  storePath: string,
+): Array<{ summary: string; spanStart: number | null; spanEnd: number | null }> {
+  const snapshot = loadStoreSnapshotIfExists(storePath);
+  if (snapshot === null) return [];
+  const { repo, branch } = rehydrateRepository(snapshot);
+  return projectState(repo.snapshot(branch.id)).events.map((e) => ({
+    summary: e.summary,
+    spanStart: e.spanStart,
+    spanEnd: e.spanEnd,
+  }));
+}
+
+/** Read an explicit alias map: a JSON object of non-empty strings, no alias that is also a canonical target. */
+export function loadAliasesFile(path: string): Record<string, string> {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path, "utf-8"));
+  } catch (error) {
+    throw new LiveRunnerError("VALIDATION_FAILED", `aliases file ${path} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new LiveRunnerError("VALIDATION_FAILED", "aliases file must be a JSON object of alias -> canonical name");
+  }
+  // Null-prototype record: a JSON "__proto__" key is an ordinary own entry here, and is rejected below anyway.
+  const out: Record<string, string> = Object.create(null) as Record<string, string>;
+  for (const [alias, canonical] of Object.entries(raw as Record<string, unknown>)) {
+    if (alias === "__proto__" || alias === "constructor" || alias === "prototype") {
+      throw new LiveRunnerError("VALIDATION_FAILED", `aliases key ${JSON.stringify(alias)} is reserved and not allowed`);
+    }
+    if (alias.trim() === "" || typeof canonical !== "string" || canonical.trim() === "") {
+      throw new LiveRunnerError("VALIDATION_FAILED", `aliases entry ${JSON.stringify(alias)} must map to a non-empty string`);
+    }
+    out[alias] = canonical;
+  }
+  for (const target of Object.values(out)) {
+    if (target === "__proto__" || target === "constructor" || target === "prototype") {
+      throw new LiveRunnerError("VALIDATION_FAILED", `aliases canonical name ${JSON.stringify(target)} is reserved and not allowed`);
+    }
+    if (Object.prototype.hasOwnProperty.call(out, target) && out[target] !== target) {
+      throw new LiveRunnerError("VALIDATION_FAILED", `alias chain: ${JSON.stringify(target)} is both a canonical name and an alias`);
+    }
+  }
+  return out;
+}
+
 export interface ExtractionCliArgs {
   file: string;
   chapterSeq: number;
@@ -2201,6 +2257,8 @@ export interface ExtractionCliArgs {
   extractorVersion: string;
   /** Per-run dispatch cap (1..3); null = default 3. */
   maxDispatches: number | null;
+  /** Durable store whose committed events become the prior timeline; null = none. */
+  store: string | null;
 }
 
 export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
@@ -2215,6 +2273,7 @@ export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
     attemptId: null,
     extractorVersion: "extractor.v3",
     maxDispatches: null,
+    store: null,
   };
   let sawMock = false;
   let sawLive = false;
@@ -2231,6 +2290,9 @@ export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
     switch (flag) {
       case "--file":
         args.file = next();
+        break;
+      case "--store":
+        args.store = next();
         break;
       case "--chapter-seq": {
         const n = Number(next());
@@ -2315,6 +2377,8 @@ export interface ReviewAcceptCliArgs {
   decisions: string;
   outDir: string | null;
   author: string | null;
+  /** Path of an explicit alias map JSON; null = none. */
+  aliases: string | null;
 }
 
 export function parseReviewAcceptArgs(argv: string[]): ReviewAcceptCliArgs {
@@ -2325,6 +2389,7 @@ export function parseReviewAcceptArgs(argv: string[]): ReviewAcceptCliArgs {
     decisions: "",
     outDir: null,
     author: null,
+    aliases: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -2354,6 +2419,9 @@ export function parseReviewAcceptArgs(argv: string[]): ReviewAcceptCliArgs {
         break;
       case "--author":
         args.author = next();
+        break;
+      case "--aliases":
+        args.aliases = next();
         break;
       default:
         throw new LiveRunnerError("VALIDATION_FAILED", `unknown flag ${JSON.stringify(flag)}`);

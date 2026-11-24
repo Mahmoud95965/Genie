@@ -26,11 +26,25 @@ export function buildExtractorUserMessage(options: {
   chapterSeq: number;
   storyOrderBase: number;
   cast: string[];
+  /**
+   * Optional: events already committed from earlier chapters, with their
+   * story-order intervals, so a later chapter can reuse the same numbers for
+   * the same moment. Absent by default (output unchanged). Whether this
+   * improves model alignment is UNMEASURED.
+   */
+  priorTimeline?: Array<{ summary: string; spanStart: number | null; spanEnd: number | null }>;
 }): string {
   const { chapterBody, chapterSeq, storyOrderBase, cast } = options;
+  const timeline = (options.priorTimeline ?? []).filter((e) => e.spanStart !== null && e.spanEnd !== null);
   return [
     `Chapter ${chapterSeq}. Story order for this chapter starts at ${storyOrderBase}.`,
     `Canonical cast (use only these names): ${cast.join(", ") || "(none given)"}.`,
+    ...(timeline.length > 0
+      ? [
+          "Earlier committed events and their story-order intervals (reuse the same numbers when this chapter describes the same moment):",
+          ...timeline.map((e) => `- [${e.spanStart}, ${e.spanEnd}] ${e.summary}`),
+        ]
+      : []),
     `<manuscript>${chapterBody}</manuscript>`,
   ].join("\n");
 }
