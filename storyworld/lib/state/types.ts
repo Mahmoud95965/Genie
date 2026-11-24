@@ -131,8 +131,18 @@ export interface ChapterHead {
   activeRevisionId: string;
 }
 
+/**
+ * How a proposition relates to the story world. Absent on a stored row
+ * (legacy ledgers, extractor.v3 and earlier) means "asserted".
+ * Only "asserted" propositions are world facts; the others are retained
+ * so their knowledge links survive, but must not be read as true.
+ */
+export type PropositionModality = "asserted" | "promised" | "intended" | "reported" | "hypothetical";
+export const PROPOSITION_MODALITY_VALUES: readonly PropositionModality[] = ["asserted", "promised", "intended", "reported", "hypothetical"];
+
 export interface Proposition {
   id: string;
+  modality?: PropositionModality;
   branchId: string;
   statement: string;
   createdInCommitId: string;

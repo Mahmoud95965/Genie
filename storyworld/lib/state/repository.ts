@@ -37,6 +37,7 @@ import type {
   PromiseEntry,
   PromiseResolution,
   Proposition,
+  PropositionModality,
   Retraction,
   CharacterFactEntry,
   EventCertainty,
@@ -101,6 +102,8 @@ export class ChapterSeqExistsError extends Error {
 /** New ledger rows accepted by `commit()`; ids are assigned by the caller. */
 export interface NewProposition {
   id: string;
+  /** Omitted = asserted (legacy). extractor.v4 commits always set it. */
+  modality?: PropositionModality;
   statement: string;
   evidence: VerifiedSpan[];
 }

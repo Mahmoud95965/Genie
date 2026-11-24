@@ -58,28 +58,6 @@ describe("extractor.v4 modality", () => {
     expect(parseExtractionArgs(["--file", "a.txt", "--extractor", "extractor.v4"]).extractorVersion).toBe("extractor.v4");
     expect(() => parseExtractionArgs(["--file", "a.txt", "--extractor", "extractor.v9"])).toThrow();
   });
-
-  it("commit refuses a non-asserted proposition; the asserted one commits once the other is rejected", () => {
-    const repo = new InMemoryStoryworldRepository();
-    const { branch } = repo.createProject("t");
-    const { revision } = repo.createChapter(branch.id, { seq: 1, body: BODY, source: "import", expectedHead: null });
-    const queue = new ReviewQueue();
-    const batch = queue.createBatch({ body: BODY, output: out("intended"), chapterRevisionId: revision.id, chapterSeq: 1 });
-    const promised = batch.items.find((i) => i.localId === "p2")!;
-    expect(() => queue.accept(batch.id, promised.id)).toThrow(/modality/);
-
-    const repo2 = new InMemoryStoryworldRepository();
-    const b2 = repo2.createProject("t2").branch;
-    const rev2 = repo2.createChapter(b2.id, { seq: 1, body: BODY, source: "import", expectedHead: null }).revision;
-    const q2 = new ReviewQueue();
-    const batch2 = q2.createBatch({ body: BODY, output: out("intended"), chapterRevisionId: rev2.id, chapterSeq: 1 });
-    for (const i of batch2.items) {
-      if (i.localId === "p2") q2.reject(batch2.id, i.id, "intention, not a fact");
-      else q2.accept(batch2.id, i.id);
-    }
-    commitBatch(q2, batch2.id, repo2, { branchId: b2.id, expectedHead: repo2.getHead(b2.id) });
-    expect(projectState(repo2.snapshot(b2.id)).propositions.map((p) => p.statement)).toEqual(["المركب خشبية"]);
-  });
 });
 
 import { EXTRACTOR_V2_PROMPT } from "../lib/extractor/profiles";
@@ -93,25 +71,101 @@ describe("v4 risk checks", () => {
     expect(EXTRACTOR_PROMPT_VERSION).toBe("extractor.v3");
   });
 
-  it("non-asserted proposition cannot be accepted; unrelated items still commit; dependents fail loudly", () => {
-    const repo = new InMemoryStoryworldRepository();
-    const { branch } = repo.createProject("t");
-    const { revision } = repo.createChapter(branch.id, { seq: 1, body: BODY, source: "import", expectedHead: null });
-    const queue = new ReviewQueue();
-    const o: any = out("promised");
-    o.knowledge = [];
-    const batch = queue.createBatch({ body: BODY, output: o, chapterRevisionId: revision.id, chapterSeq: 1, requireModality: true });
-    const bad = batch.items.find((i) => i.localId === "p2")!;
-    expect(() => queue.accept(batch.id, bad.id)).toThrow(/modality/);
-    queue.accept(batch.id, batch.items.find((i) => i.localId === "p1")!.id);
-    commitBatch(queue, batch.id, repo, { branchId: branch.id, expectedHead: repo.getHead(branch.id) });
-    expect(projectState(repo.snapshot(branch.id)).propositions).toHaveLength(1);
-  });
-
   it("v4 batch: missing modality is a validation error and is never treated as asserted", () => {
     const queue = new ReviewQueue();
     expect(() => queue.createBatch({ body: BODY, output: out(), requireModality: true })).toThrow(/modality/);
     // legacy (non-v4) batch keeps old behavior
     expect(() => queue.createBatch({ body: BODY, output: out() })).not.toThrow();
+  });
+});
+
+import { assertedPropositions, propositionModality } from "../lib/state/projections";
+import { ValidationFailedError, emptyCommitItems } from "../lib/state/repository";
+
+const BODY2 = "قالت هدى إن المندوب هييجي الثلاثاء. المركب خشبية.";
+function span2(q: string) {
+  const s = BODY2.indexOf(q);
+  const a = [...BODY2.slice(0, s)].length;
+  return [{ quote: q, start_offset: a, end_offset: a + [...q].length }];
+}
+function v4Output() {
+  return {
+    propositions: [
+      { local_id: "p1", statement: "المركب خشبية", modality: "asserted", evidence: span2("المركب خشبية") },
+      { local_id: "p2", statement: "المندوب هييجي الثلاثاء", modality: "reported", evidence: span2("المندوب هييجي الثلاثاء") },
+    ],
+    events: [
+      {
+        local_id: "e1", kind: "dialogue", summary: "هدى تخبر بموعد المندوب",
+        participants: [{ character: "هدى", role: "speaker" }], location: null, story_time: null,
+        span_start: 1, span_end: 1, reality_scope: "real", certainty: "asserted",
+        evidence: span2("قالت هدى إن المندوب هييجي الثلاثاء"), knowledge_transfer: null, knowledge_use: null,
+      },
+    ],
+    knowledge: [
+      { character: "هدى", proposition_local_id: "p2", learned_how: "told", certainty: "asserted", learned_at_event_local_id: "e1", evidence: span2("المندوب هييجي الثلاثاء") },
+    ],
+    character_facts: [],
+    promises: [],
+  };
+}
+
+describe("modality-preserving store (v4)", () => {
+  function commitAll(repoSetup = new InMemoryStoryworldRepository()) {
+    const repo = repoSetup;
+    const { branch } = repo.createProject("t");
+    const rev = repo.createChapter(branch.id, { seq: 1, body: BODY2, source: "import", expectedHead: null }).revision;
+    const q = new ReviewQueue();
+    const batch = q.createBatch({ body: BODY2, output: v4Output(), chapterRevisionId: rev.id, chapterSeq: 1, requireModality: true });
+    for (const i of batch.items) q.accept(batch.id, i.id);
+    const result = commitBatch(q, batch.id, repo, { branchId: branch.id, expectedHead: repo.getHead(branch.id) });
+    return { repo, branch, result };
+  }
+
+  it("a reported proposition is accepted, stored WITH its modality, and its knowledge link survives", () => {
+    const { repo, branch } = commitAll();
+    const state = projectState(repo.snapshot(branch.id));
+    expect(state.propositions.map((p) => [p.statement, propositionModality(p)])).toEqual([
+      ["المركب خشبية", "asserted"],
+      ["المندوب هييجي الثلاثاء", "reported"],
+    ]);
+    expect(state.knowledge).toHaveLength(1);
+    const reported = state.propositions.find((p) => p.modality === "reported")!;
+    expect(state.knowledge[0].propositionId).toBe(reported.id);
+  });
+
+  it("world facts exclude non-asserted propositions; legacy rows without modality count as asserted", () => {
+    const { repo, branch } = commitAll();
+    const state = projectState(repo.snapshot(branch.id));
+    expect(assertedPropositions(state).map((p) => p.statement)).toEqual(["المركب خشبية"]);
+    const legacy = { ...state.propositions[0] } as Record<string, unknown>;
+    delete legacy.modality;
+    expect(propositionModality(legacy as never)).toBe("asserted");
+  });
+
+  it("modality survives a JSON round trip of the ledger snapshot", () => {
+    const { repo, branch } = commitAll();
+    const snap = JSON.parse(JSON.stringify(repo.snapshot(branch.id)));
+    const state = projectState(snap);
+    expect(state.propositions.map((p) => p.modality)).toEqual(["asserted", "reported"]);
+  });
+
+  it("the repository rejects an invalid modality; omitted modality stays legacy (no field written)", () => {
+    const repo = new InMemoryStoryworldRepository();
+    const { branch } = repo.createProject("t");
+    repo.createChapter(branch.id, { seq: 1, body: BODY2, source: "import", expectedHead: null });
+    const items = emptyCommitItems();
+    items.propositions.push({ id: "00000000-0000-0000-0000-000000000001", statement: "x", modality: "certain" as never, evidence: [] });
+    expect(() => repo.commit({ branchId: branch.id, expectedHead: repo.getHead(branch.id), items } as never)).toThrow(ValidationFailedError);
+  });
+
+  it("v4 batch commit still refuses a proposition with no modality", () => {
+    const repo = new InMemoryStoryworldRepository();
+    const { branch } = repo.createProject("t");
+    const rev = repo.createChapter(branch.id, { seq: 1, body: BODY2, source: "import", expectedHead: null }).revision;
+    const q = new ReviewQueue();
+    const o: any = v4Output();
+    delete o.propositions[1].modality;
+    expect(() => q.createBatch({ body: BODY2, output: o, chapterRevisionId: rev.id, requireModality: true })).toThrow(/modality/);
   });
 });

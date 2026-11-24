@@ -47,6 +47,7 @@ import {
   characterName,
   eventParticipants,
   findEvent,
+  propositionModality,
   type ProjectedState,
 } from "../state/projections";
 
@@ -355,7 +356,12 @@ export function checkKnowledgeLeak(
   options: CheckerOptions = {},
 ): CheckerFinding[] {
   const findings: CheckerFinding[] = [];
-  const closedWorld = options.closedWorldPropositionIds ?? new Set<string>();
+  // Truth boundary: "closed world" means the world is known to lack this
+  // fact. Only asserted propositions are world facts, so a caller-supplied id
+  // that resolves to a promised/intended/reported/hypothetical proposition is
+  // dropped here, whatever the caller passed.
+  const nonAsserted = new Set(state.propositions.filter((p) => propositionModality(p) !== "asserted").map((p) => p.id));
+  const closedWorld = new Set([...(options.closedWorldPropositionIds ?? [])].filter((id) => !nonAsserted.has(id)));
   const nonKnowledge = options.explicitNonKnowledge ?? new Set<string>();
 
   for (const use of state.knowledgeUses) {

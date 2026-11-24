@@ -20,6 +20,7 @@ import type {
   PromiseEntry,
   PromiseStatus,
   Proposition,
+  PropositionModality,
 } from "./types";
 import type { LedgerSnapshot } from "./repository";
 
@@ -121,6 +122,16 @@ export function projectState(snapshot: LedgerSnapshot): ProjectedState {
 }
 
 /** Look up an event in projected state by id (current events only). */
+/** A proposition's effective modality; a row without one is a legacy asserted fact. */
+export function propositionModality(p: Proposition): PropositionModality {
+  return p.modality ?? "asserted";
+}
+
+/** World facts only: promised/intended/reported/hypothetical propositions are excluded. */
+export function assertedPropositions(state: ProjectedState): Proposition[] {
+  return state.propositions.filter((p) => propositionModality(p) === "asserted");
+}
+
 export function findEvent(state: ProjectedState, eventId: string): EventEntry | undefined {
   return state.events.find((e) => e.id === eventId);
 }

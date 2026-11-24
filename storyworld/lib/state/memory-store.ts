@@ -12,6 +12,7 @@
 import { randomUUID, createHash } from "node:crypto";
 
 import { normalizeBody } from "../extractor/evidence";
+import { PROPOSITION_MODALITY_VALUES } from "./types";
 import type {
   Branch,
   Chapter,
@@ -183,6 +184,7 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
       statement: p.statement,
       createdInCommitId: commit.id,
       evidence: p.evidence,
+      ...(p.modality !== undefined ? { modality: p.modality } : {}),
     }));
     const insertedEvents: EventEntry[] = items.events.map((e) => ({
       id: e.id,
@@ -395,6 +397,9 @@ export class InMemoryStoryworldRepository implements StoryworldRepository {
     for (const [i, p] of items.propositions.entries()) {
       if (typeof p.statement !== "string" || p.statement.trim().length === 0) {
         issues.push({ path: `$.propositions[${i}]`, message: "statement must be a non-empty string" });
+      }
+      if (p.modality !== undefined && !PROPOSITION_MODALITY_VALUES.includes(p.modality)) {
+        issues.push({ path: `$.propositions[${i}].modality`, message: "invalid modality" });
       }
       checkEvidence(`$.propositions[${i}].evidence`, p.evidence);
     }

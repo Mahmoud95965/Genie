@@ -33,7 +33,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import type { Commit } from "../state/types";
+import { PROPOSITION_MODALITY_VALUES, type Commit, type PropositionModality } from "../state/types";
 import type {
   CommitItems,
   CommitResult,
@@ -225,10 +225,8 @@ export function commitBatch(
       fail(item.id, "extractor.v4 batch: proposition has no modality; refusing to treat it as asserted");
       continue;
     }
-    if (modality !== undefined && modality !== "asserted") {
-      // v4: a promise/intention/report/hypothetical is not a world fact. The
-      // reviewer must reject it (it stays on the batch as history).
-      fail(item.id, `proposition modality ${JSON.stringify(modality)} cannot be committed as an asserted world fact; reject it`);
+    if (modality !== undefined && !PROPOSITION_MODALITY_VALUES.includes(modality as PropositionModality)) {
+      fail(item.id, `invalid proposition modality ${JSON.stringify(modality)}`);
       continue;
     }
     const id = randomUUID();
@@ -238,7 +236,13 @@ export function commitBatch(
       fail(item.id, "statement must be a non-empty string");
       continue;
     }
-    items.propositions.push({ id, statement, evidence: buildVerifiedSpans(batch, item) });
+    items.propositions.push({
+      id,
+      statement,
+      evidence: buildVerifiedSpans(batch, item),
+      // v4: keep the modality; a non-asserted proposition is stored, never read as a world fact.
+      ...(modality !== undefined ? { modality: modality as PropositionModality } : {}),
+    });
     committed.propositions.push(id);
   }
 

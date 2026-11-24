@@ -172,11 +172,7 @@ export class ReviewQueue {
           evidence: evidenceSpans,
           status: "pending",
           rejectReason: null,
-          verificationError:
-            rejectedByPath.get(itemPath) ??
-            (section === "propositions" && rawItem.modality !== undefined && rawItem.modality !== "asserted"
-              ? `modality ${JSON.stringify(rawItem.modality)}: not committable as an asserted world fact; reject it`
-              : null),
+          verificationError: rejectedByPath.get(itemPath) ?? null,
           targetPromiseId: null,
           resolutionConflict: null,
           resolutionConflictConfirmed: false,

@@ -412,6 +412,28 @@ describe("KNOWLEDGE_LEAK", () => {
     expect(findings[0].subjects).toContain(CHAR.karim);
   });
 
+  it("closed-world boundary: a non-asserted proposition is never treated as closed-world, an asserted one still is", () => {
+    const build = (modality?: string) => {
+      const state = makeState({
+        events: [learn(), useEvent()],
+        participants: [
+          part("e-learn", CHAR.omar, "speaker"),
+          part("e-learn", CHAR.layla, "listener"),
+          part("e-use", CHAR.karim, "subject"),
+        ],
+        knowledge: [know({ id: "k-1", characterId: CHAR.layla, learnedAtEventId: "e-learn" })],
+        uses: [use({ eventId: "e-use" })],
+      });
+      state.propositions = [{ id: "prop-1", statement: "x", ...(modality ? { modality } : {}) } as never];
+      return state;
+    };
+    const opts = { closedWorldPropositionIds: new Set(["prop-1"]) };
+    expect(checkKnowledgeLeak(build("reported"), opts).every((f) => f.confidence !== "confirmed")).toBe(true);
+    expect(checkKnowledgeLeak(build("promised"), opts).every((f) => f.confidence !== "confirmed")).toBe(true);
+    expect(checkKnowledgeLeak(build("asserted"), opts)[0].confidence).toBe("confirmed");
+    expect(checkKnowledgeLeak(build(), opts)[0].confidence).toBe("confirmed");
+  });
+
   it("open-world leak is uncertain, never confirmed", () => {
     const state = makeState({
       events: [learn(), useEvent()],
