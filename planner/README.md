@@ -10,4 +10,4 @@ Limits:
 - Saving after closing or refreshing the page is not guaranteed.
 - The name is a working name; no trademark or domain check was done.
 
-Files: `core.ts` (scheduling and checks), `App.tsx` (UI, imports the `@instinct/files` component kit used by the File host), `style.css`.
+Files: `core.ts` (scheduling and checks; plain code, no host dependency, tested by `core.test.ts` via `npm test`), `App.tsx` (UI, imports the `@instinct/files` component kit, so it runs only inside the Genie File host, not in this Next site), `style.css`.
