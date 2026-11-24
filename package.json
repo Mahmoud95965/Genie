@@ -8,8 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest run",
-    "storyworld:m0": "vitest run storyworld/scripts/run-m0-job.test.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "framer-motion": "^11.3.0",

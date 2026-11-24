@@ -72,17 +72,6 @@ export default function ProjectCover({
               <circle cx="200" cy="34" r="4" fill="#60A5FA" />
             </svg>
           )}
-          {project.slug === "storyworld" && (
-            <svg viewBox="0 0 400 240" className="absolute inset-0 h-full w-full" aria-hidden="true">
-              <path d="M200 40 V200" stroke="#22D3EE" strokeWidth="1" opacity="0.5" />
-              {[56, 120, 184].map((y, i) => (
-                <g key={y}>
-                  <rect x={140} y={y - 16} width={120} height={32} rx={8} fill="none" stroke="#22D3EE" strokeWidth="1.5" opacity={0.9 - i * 0.2} />
-                  <circle cx={200} cy={y} r={5} fill="#67E8F9" />
-                </g>
-              ))}
-            </svg>
-          )}
         </>
       )}
       {/* venture number — navy translucent on a cover image, white on the dark motif */}
