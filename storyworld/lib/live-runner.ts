@@ -1989,7 +1989,7 @@ export function runReviewAccept(args: RunReviewAcceptArgs): ReviewSummary {
     output: artifact.extractorOutput,
     chapterRevisionId: revision.id,
     chapterSeq: artifact.chapterSeq,
-    requireModality: artifact.extractor.promptVersion === "extractor.v4",
+    requireModality: requireModalityForArtifact(artifact.extractor.promptVersion),
   });
   if (batch.bodySha256 !== artifact.bodySha256) {
     throw new LiveRunnerError(
@@ -2259,6 +2259,7 @@ export interface ExtractionCliArgs {
   maxDispatches: number | null;
   /** Durable store whose committed events become the prior timeline; null = none. */
   store: string | null;
+  cast: string[];
 }
 
 export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
@@ -2274,6 +2275,7 @@ export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
     extractorVersion: "extractor.v3",
     maxDispatches: null,
     store: null,
+    cast: [],
   };
   let sawMock = false;
   let sawLive = false;
@@ -2293,6 +2295,9 @@ export function parseExtractionArgs(argv: string[]): ExtractionCliArgs {
         break;
       case "--store":
         args.store = next();
+        break;
+      case "--cast":
+        args.cast = loadCastFile(next());
         break;
       case "--chapter-seq": {
         const n = Number(next());
@@ -2433,4 +2438,46 @@ export function parseReviewAcceptArgs(argv: string[]): ReviewAcceptCliArgs {
     throw new LiveRunnerError("VALIDATION_FAILED", "--decisions <path> is required");
   }
   return args;
+}
+
+
+/** Read an explicit cast: a JSON array of unique, non-empty canonical names. Names only, no facts. */
+export function loadCastFile(path: string): string[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path, "utf-8"));
+  } catch (error) {
+    throw new LiveRunnerError("VALIDATION_FAILED", `cast file ${path} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new LiveRunnerError("VALIDATION_FAILED", "cast file must be a non-empty JSON array of names");
+  }
+  const seen = new Set<string>();
+  for (const name of raw) {
+    if (typeof name !== "string" || name.trim() === "" || name === "__proto__" || name === "constructor" || name === "prototype") {
+      throw new LiveRunnerError("VALIDATION_FAILED", "cast entries must be non-empty strings (reserved names not allowed)");
+    }
+    if (seen.has(name)) throw new LiveRunnerError("VALIDATION_FAILED", `duplicate cast name ${JSON.stringify(name)}`);
+    seen.add(name);
+  }
+  return [...seen];
+}
+
+
+/**
+ * Whether a saved review-batch artifact must carry modality on every proposition, from the extractor
+ * version that produced it.
+ * - Known profile: answered by the profile.
+ * - Missing version (legacy artifact written before promptVersion was recorded): keep the old behaviour,
+ *   no modality requirement, because the artifact format never required the field.
+ * - Explicit version this code does not know (artifact from a different build): fail clearly. The old
+ *   `=== "extractor.v4"` check silently treated every such version as modality-free.
+ */
+export function requireModalityForArtifact(promptVersion: string | undefined | null): boolean {
+  if (promptVersion === undefined || promptVersion === null) return false;
+  try {
+    return getExtractorProfile(promptVersion).requireModality;
+  } catch {
+    throw new LiveRunnerError("ARTIFACT_INVALID", `artifact extractor version ${JSON.stringify(promptVersion)} is not a known profile; refusing to guess modality rules`);
+  }
 }

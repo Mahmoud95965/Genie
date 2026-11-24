@@ -73,7 +73,7 @@ async function main(): Promise<void> {
           extractorVersion: cli.extractorVersion,
           ...(cli.maxDispatches !== null ? { dispatchCap: cli.maxDispatches } : {}),
           storyOrderBase: cli.storyOrderBase,
-          cast: [],
+          cast: cli.cast,
           ...(cli.store ? { priorTimeline: priorTimelineFromStore(cli.store) } : {}),
           model: slug,
           provider,
