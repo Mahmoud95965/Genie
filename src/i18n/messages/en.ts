@@ -16,7 +16,6 @@ export const enMessages = {
   nav: {
     home: "Home",
     work: "Ventures",
-    planner: "Planner (beta)",
     about: "About",
     contact: "Contact",
     letsTalk: "Let’s Talk",

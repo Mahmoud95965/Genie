@@ -10,7 +10,6 @@ function entriesFor(locale: Locale): MetadataRoute.Sitemap {
     { url: prefix, lastModified: new Date(), changeFrequency: "monthly", priority: 1 },
     { url: `${prefix}/work`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.9 },
     { url: `${prefix}/about`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.8 },
-    { url: `${prefix}/planner`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.6 },
     { url: `${prefix}/contact`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.8 },
   ];
   for (const p of projects) {

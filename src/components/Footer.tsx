@@ -15,7 +15,6 @@ export default function Footer({ locale, t }: { locale: Locale; t: Messages }) {
   ];
   const workLinks = [
     { label: "Port Said Hub", href: localizedPath(locale, "/work/port-said-hub") },
-    { label: "Laha2ha — day planner (prototype)", href: localizedPath(locale, "/planner") },
   ];
 
   return (

@@ -18,7 +18,6 @@ export const arMessages: Messages = {
   nav: {
     home: "الرئيسية",
     work: "المشاريع",
-    planner: "لحّقها (تجربة)",
     about: "من نحن",
     contact: "تواصل",
     letsTalk: "لنتحدث",
